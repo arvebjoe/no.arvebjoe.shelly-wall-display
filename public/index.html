@@ -1,0 +1,408 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+  <meta charset="utf-8" />
+  <title>Gym & Cinema Control</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no" />
+  <meta name="color-scheme" content="dark" />
+  <style>
+    :root {
+      --bg-primary: #0a0a0a;
+      --bg-secondary: #1a1a1a;
+      --bg-button: #2a2a2a;
+      --bg-button-hover: #3a3a3a;
+      --bg-button-active: #4a4a4a;
+      --text-primary: #ffffff;
+      --text-secondary: #cccccc;
+      --accent-cinema: #e74c3c;
+      --accent-gym: #3498db;
+      --accent-light-off: #555555;
+      --accent-light-low: #f39c12;
+      --accent-light-medium: #e67e22;
+      --accent-light-full: #f1c40f;
+      --radius: 16px;
+      --gap: 16px;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    html,
+    body {
+      height: 100vh;
+      font-family: system-ui, -apple-system, "Segoe UI", Roboto, Ubuntu, Cantarell, Arial, sans-serif;
+      background: var(--bg-primary);
+      color: var(--text-primary);
+      overflow: hidden;
+    }
+
+    .container {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      height: 100vh;
+      gap: var(--gap);
+      padding: var(--gap);
+    }
+
+    .column {
+      display: flex;
+      flex-direction: column;
+      gap: var(--gap);
+    }
+
+    .button {
+      background: var(--bg-button);
+      border: none;
+      border-radius: var(--radius);
+      color: var(--text-primary);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: clamp(24px, 4vw, 48px);
+      font-weight: 600;
+      text-align: center;
+      transition: all 0.2s ease;
+      user-select: none;
+      -webkit-tap-highlight-color: transparent;
+      position: relative;
+      overflow: hidden;
+    }
+
+
+
+    .button:active {
+      background: var(--bg-button-active);      
+    }
+
+    .button::before {
+      content: '';
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      width: 0;
+      height: 0;
+      background: rgba(255, 255, 255, 0.1);
+      border-radius: 50%;
+      transform: translate(-50%, -50%);
+      transition: width 0.4s, height 0.4s;
+    }
+
+    .button:active::before {
+      width: 300px;
+      height: 300px;
+    }
+
+    /* Light Control Slider */
+    .light-slider-container {
+      position: relative;
+      height: 100%;
+      background: #1a1a1a;
+      border-radius: var(--radius);
+      overflow: hidden;
+      border: 2px solid #333;
+    }
+
+    .light-bulb-background {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background-image: url('light_off.png');
+      background-size: cover;
+      background-position: center;
+      background-repeat: no-repeat;
+    }
+
+    .light-slider-track {
+      position: relative;
+      height: 100%;
+      width: 100%;
+      cursor: grab;
+    }
+
+    .light-slider-track:active {
+      cursor: grabbing;
+    }
+
+    .light-fill {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 0%;
+      transition: height 0.3s ease;
+      pointer-events: none;
+      overflow: hidden;
+    }
+
+    .light-fill::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100vh;
+      background-image: url('light_on.png');
+      background-size: cover;
+      background-position: top center;
+      background-repeat: no-repeat;
+    }
+
+    .light-handle {
+      position: absolute;
+      left: 50%;
+      width: 60px;
+      height: 8px;
+      background: #fff;
+      border: 2px solid #333;
+      border-radius: 4px;
+      transform: translateX(-50%);
+      transition: top 0.3s ease;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+      cursor: grab;
+    }
+
+    .light-handle:active {
+      cursor: grabbing;
+      background: #f1c40f;
+    }
+
+    .light-labels {
+      position: absolute;
+      right: 8px;
+      top: 0;
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      padding: 12px 0;
+      font-size: clamp(12px, 2vw, 16px);
+      font-weight: 600;
+      color: #ccc;
+      pointer-events: none;
+    }
+
+    /* Scene Buttons */
+    .scene-button {
+      height: 100%;
+      font-size: clamp(32px, 5vw, 64px);
+      background: var(--bg-button);
+      display: flex;
+      align-items: center;
+      justify-content: center;      
+    }
+
+    .scene-button img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      filter: grayscale(100%) brightness(0.7);
+      transition: filter 0.3s ease, transform 0.2s ease;
+    }
+
+    .scene-button.active img {
+      filter: grayscale(0%) brightness(1);
+    }
+
+    /* Pressed state - immediate feedback */
+    .scene-button.pressed {
+      transform: scale(0.95);
+      box-shadow: inset 0 4px 8px rgba(0, 0, 0, 0.3);
+      transition: transform 0.1s ease, box-shadow 0.1s ease;
+    }
+
+    .scene-button.pressed img {
+      filter: grayscale(60%) brightness(0.9);
+      transform: scale(0.98);
+    }
+
+
+    .cinema-button {
+      background: var(--bg-button);
+    }
+
+    .gym-button {
+      background: var(--bg-button);
+    }
+
+    /* Active state */
+    .button.active {
+      box-shadow: 0 0 20px rgba(255, 255, 255, 0.3); 
+      z-index: 1;
+    }
+
+
+  </style>
+</head>
+
+<body>
+  <div class="container">
+    <!-- Column 1: Light Controls -->
+    <div class="column">
+      <div class="light-slider-container" id="light-slider">
+        <div class="light-bulb-background"></div>
+        <div class="light-slider-track">
+          <div class="light-fill" id="light-fill"></div>
+          <div class="light-handle" id="light-handle"></div>
+        </div>
+        <div class="light-labels">
+          <span>OFF</span>
+          <span>LOW</span>
+          <span>MED</span>
+          <span>FULL</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Column 2: Cinema Scene -->
+    <div class="column">
+      <button class="button scene-button cinema-button" data-action="scene" data-scene="cinema">
+        <img src="cinema.png" alt="Cinema Scene" />
+      </button>
+    </div>
+
+    <!-- Column 3: Gym Scene -->
+    <div class="column">
+      <button class="button scene-button gym-button" data-action="scene" data-scene="gym">
+        <img src="gym.png" alt="Gym Scene" />
+      </button>
+    </div>
+  </div>
+
+  <script>
+    // Track current states
+    let currentLightLevel = 0; // 0 = off, 1 = low, 2 = medium, 3 = full
+    let currentScene = null;
+    let isDragging = false;
+
+    const lightLevels = ['OFF', 'LOW', 'MEDIUM', 'FULL'];
+    const slider = document.getElementById('light-slider');
+    const fill = document.getElementById('light-fill');
+    const handle = document.getElementById('light-handle');
+
+    // Update slider visual state
+    function updateSliderVisual(level) {
+      const percentage = (level / 3) * 100;
+      fill.style.height = `${percentage}%`;
+      handle.style.top = `${percentage}%`;
+    }
+
+    // Convert Y position to light level
+    function yPositionToLevel(y, sliderRect) {
+      const relativeY = y - sliderRect.top;
+      const percentage = Math.max(0, Math.min(1, relativeY / sliderRect.height));
+      return Math.round(percentage * 3);
+    }
+
+    // Handle slider interaction
+    function handleSliderInteraction(clientY) {
+      const sliderRect = slider.getBoundingClientRect();
+      const newLevel = yPositionToLevel(clientY, sliderRect);
+      
+      if (newLevel !== currentLightLevel) {
+        currentLightLevel = newLevel;
+        updateSliderVisual(currentLightLevel);
+        
+        // Temporary: Refresh page when medium level is set
+        if (currentLightLevel === 2) {
+          console.log('Medium light level - refreshing page...');
+          setTimeout(() => location.reload(), 300);
+          return;
+        }
+        
+        console.log(`Light level set to: ${lightLevels[currentLightLevel]}`);
+        // TODO: Send light control event to server
+      }
+    }
+
+    // Mouse events
+    slider.addEventListener('mousedown', (e) => {
+      isDragging = true;
+      handleSliderInteraction(e.clientY);
+    });
+
+    document.addEventListener('mousemove', (e) => {
+      if (isDragging) {
+        handleSliderInteraction(e.clientY);
+      }
+    });
+
+    document.addEventListener('mouseup', () => {
+      isDragging = false;
+    });
+
+    // Touch events
+    slider.addEventListener('touchstart', (e) => {
+      e.preventDefault();
+      isDragging = true;
+      const touch = e.touches[0];
+      handleSliderInteraction(touch.clientY);
+    });
+
+    document.addEventListener('touchmove', (e) => {
+      if (isDragging) {
+        e.preventDefault();
+        const touch = e.touches[0];
+        handleSliderInteraction(touch.clientY);
+      }
+    }, { passive: false });
+
+    document.addEventListener('touchend', () => {
+      isDragging = false;
+    });
+
+    // Scene button handling
+    async function handleSceneButtonClick(button) {
+      const scene = button.dataset.scene;
+
+      // Add immediate pressed state for visual feedback
+      button.classList.add('pressed');
+
+      // Remove active and pressed state from all scene buttons
+      document.querySelectorAll('.scene-button').forEach(btn => {
+        btn.classList.remove('active', 'pressed');
+      });
+      
+      // Re-add pressed state to clicked button
+      button.classList.add('pressed');
+      currentScene = scene;
+      
+      console.log(`Scene activated: ${scene}`);
+      // TODO: Send scene control event to server
+      
+      // Simulate backend response delay (remove this when implementing real backend)
+      setTimeout(() => {
+        button.classList.remove('pressed');
+        button.classList.add('active');
+      }, 800);
+    }
+
+    // Add click event listeners to scene buttons
+    document.querySelectorAll('.scene-button').forEach(button => {
+      button.addEventListener('click', () => handleSceneButtonClick(button));
+    });
+
+    // Initialize slider
+    updateSliderVisual(currentLightLevel);
+
+    // Prevent text selection and improve touch experience
+    document.addEventListener('selectstart', e => e.preventDefault());
+    document.addEventListener('contextmenu', e => e.preventDefault());
+    
+    // Handle visibility changes for better kiosk experience
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible') {
+        // Could refresh state or reconnect here
+        console.log('Display became visible');
+      }
+    });
+  </script>
+</body>
+
+</html>
