@@ -1,7 +1,7 @@
 'use strict';
 
 import Homey from 'homey';
-import { KioskServer } from './src/server';
+import { KioskServer } from './server';
 
 module.exports = class ShellyWallDisplayApp extends Homey.App {
   private kioskServer!: KioskServer;

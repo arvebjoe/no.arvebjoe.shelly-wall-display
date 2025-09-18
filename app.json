@@ -11,7 +11,7 @@
     "en": "Shelly Wall Display"
   },
   "description": {
-    "en": "Adds support for MyBrand devices."
+    "en": "Shelly Wall display from Homey"
   },
   "category": [
     "tools"
@@ -25,6 +25,12 @@
   "author": {
     "name": "Arve Bjørnerud",
     "email": "arvebjoe@hotmail.com"
+  },
+  "brandColor": "#514278",
+  "tags": {
+    "en": [
+      "It works!"
+    ]
   },
   "flow": {
     "triggers": [

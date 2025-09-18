@@ -1,1 +1,1 @@
-Adds support for MyBrand devices.
+Shelly wall display controlling Homey flows
