@@ -1,0 +1,27 @@
+{
+  "title": {
+    "en": "scene-selected"
+  },
+  "tokens": [
+    {
+      "type": "string",
+      "name": "name",
+      "title": {
+        "en": "name"
+      },
+      "example": {
+        "en": "Name of selected scene"
+      }
+    }, 
+    {
+      "type": "boolean",
+      "name": "active",
+      "title": {
+        "en": "active"
+      },
+      "example": {
+        "en": "Is It active"
+      }
+    }
+  ]
+}

@@ -25,5 +25,108 @@
   "author": {
     "name": "Arve Bjørnerud",
     "email": "arvebjoe@hotmail.com"
+  },
+  "flow": {
+    "triggers": [
+      {
+        "title": {
+          "en": "light-level-changed"
+        },
+        "tokens": [
+          {
+            "type": "number",
+            "name": "strength",
+            "title": {
+              "en": "strength"
+            },
+            "example": {
+              "en": "Strength of the light"
+            }
+          }
+        ],
+        "id": "light-level-changed"
+      },
+      {
+        "title": {
+          "en": "scene-selected"
+        },
+        "tokens": [
+          {
+            "type": "string",
+            "name": "name",
+            "title": {
+              "en": "name"
+            },
+            "example": {
+              "en": "Name of selected scene"
+            }
+          },
+          {
+            "type": "boolean",
+            "name": "active",
+            "title": {
+              "en": "active"
+            },
+            "example": {
+              "en": "Is It active"
+            }
+          }
+        ],
+        "id": "scene-selected"
+      }
+    ],
+    "actions": [
+      {
+        "title": {
+          "en": "light-level-complete"
+        },
+        "args": [
+          {
+            "type": "number",
+            "name": "strength",
+            "placeholder": {
+              "en": "The light level strength"
+            },
+            "min": 0,
+            "max": 1,
+            "step": 0.01
+          }
+        ],
+        "id": "light-level-complete"
+      },
+      {
+        "title": {
+          "en": "scene-complete"
+        },
+        "args": [
+          {
+            "type": "text",
+            "name": "name",
+            "placeholder": {
+              "en": "Name of the scene"
+            }
+          },
+          {
+            "type": "dropdown",
+            "name": "active",
+            "values": [
+              {
+                "id": "true",
+                "label": {
+                  "en": "True"
+                }
+              },
+              {
+                "id": "false",
+                "label": {
+                  "en": "False"
+                }
+              }
+            ]
+          }
+        ],
+        "id": "scene-complete"
+      }
+    ]
   }
 }

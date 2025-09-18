@@ -1,0 +1,32 @@
+{
+  "title": {
+    "en": "scene-complete"
+  },
+  "args": [
+    {
+      "type": "text",
+      "name": "name",
+      "placeholder": {
+        "en": "Name of the scene"
+      }
+    },
+    {
+      "type": "dropdown",
+      "name": "active",
+      "values": [
+        {
+          "id": "true",
+          "label": {
+            "en": "True"
+          }
+        },
+        {
+          "id": "false",
+          "label": {
+            "en": "False"
+          }
+        }
+      ]
+    }    
+  ]
+}

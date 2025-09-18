@@ -1,0 +1,17 @@
+{
+  "title": {
+    "en": "light-level-complete"
+  },
+  "args": [
+    {
+      "type": "number",
+      "name": "strength",
+      "placeholder": {
+        "en": "The light level strength"
+      },
+      "min": 0,
+      "max": 1,
+      "step": 0.01
+    }
+  ]
+}

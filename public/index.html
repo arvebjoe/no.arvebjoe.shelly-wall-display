@@ -237,6 +237,69 @@
       z-index: 1;
     }
 
+    /* Reconnection Overlay */
+    .reconnection-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.8);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+      backdrop-filter: blur(4px);
+    }
+
+    .reconnection-overlay.hidden {
+      display: none;
+    }
+
+    .reconnection-message {
+      color: var(--text-primary);
+      font-size: clamp(24px, 4vw, 48px);
+      font-weight: 600;
+      text-align: center;
+      margin-bottom: 24px;
+    }
+
+    .reconnection-status {
+      color: var(--text-secondary);
+      font-size: clamp(16px, 3vw, 24px);
+      text-align: center;
+      margin-bottom: 32px;
+    }
+
+    .spinner {
+      font-size: clamp(48px, 8vw, 96px);
+      font-weight: bold;
+      color: var(--text-primary);
+      animation: spin 1s infinite;
+    }
+
+    @keyframes spin {
+      0% { content: '—'; }
+      25% { content: '\\'; }
+      50% { content: '|'; }
+      75% { content: '/'; }
+      100% { content: '—'; }
+    }
+
+    .spinner::before {
+      content: '—';
+      animation: spin-chars 1s infinite;
+    }
+
+    @keyframes spin-chars {
+      0% { content: '—'; }
+      25% { content: '\\'; }
+      50% { content: '|'; }
+      75% { content: '/'; }
+      100% { content: '—'; }
+    }
+
 
   </style>
 </head>
@@ -275,6 +338,13 @@
     </div>
   </div>
 
+  <!-- Reconnection Overlay -->
+  <div class="reconnection-overlay hidden" id="reconnection-overlay">
+    <div class="reconnection-message">Connection Lost</div>
+    <div class="reconnection-status" id="reconnection-status">Attempting to reconnect...</div>
+    <div class="spinner"></div>
+  </div>
+
   <script>
     // Track current states
     let currentLightLevel = 0; // 0 = off, 1 = low, 2 = medium, 3 = full
@@ -285,6 +355,125 @@
     const slider = document.getElementById('light-slider');
     const fill = document.getElementById('light-fill');
     const handle = document.getElementById('light-handle');
+
+    // WebSocket connection
+    let ws = null;
+    let reconnectAttempts = 0;
+    let reconnectTimer = null;
+
+    const reconnectionOverlay = document.getElementById('reconnection-overlay');
+    const reconnectionStatus = document.getElementById('reconnection-status');
+
+    function showReconnectionOverlay() {
+      reconnectionOverlay.classList.remove('hidden');
+    }
+
+    function hideReconnectionOverlay() {
+      reconnectionOverlay.classList.add('hidden');
+    }
+
+    function updateReconnectionStatus(attempt) {
+      reconnectionStatus.textContent = `Reconnecting... (attempt ${attempt})`;
+    }
+
+    function connectWebSocket() {
+      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+      const wsUrl = `${protocol}//${window.location.host}`;
+      
+      try {
+        ws = new WebSocket(wsUrl);
+        
+        ws.onopen = function() {
+          console.log('WebSocket connected');
+          reconnectAttempts = 0;
+          hideReconnectionOverlay();
+          
+          if (reconnectTimer) {
+            clearTimeout(reconnectTimer);
+            reconnectTimer = null;
+          }
+        };
+        
+        ws.onmessage = function(event) {
+          try {
+            const message = JSON.parse(event.data);
+            handleWebSocketMessage(message);
+          } catch (error) {
+            console.error('Failed to parse WebSocket message:', error);
+          }
+        };
+        
+        ws.onclose = function() {
+          console.log('WebSocket disconnected');
+          showReconnectionOverlay();
+          
+          // Always attempt to reconnect
+          reconnectAttempts++;
+          updateReconnectionStatus(reconnectAttempts);
+          
+          reconnectTimer = setTimeout(() => {
+            connectWebSocket();
+          }, Math.min(2000 + (reconnectAttempts * 1000), 30000)); // Cap at 30 seconds
+        };
+        
+        ws.onerror = function(error) {
+          console.error('WebSocket error:', error);
+          showReconnectionOverlay();
+        };
+      } catch (error) {
+        console.error('Failed to create WebSocket connection:', error);
+        showReconnectionOverlay();
+      }
+    }
+
+    function sendWebSocketMessage(type, data) {
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({ type, data }));
+      } else {
+        console.warn('WebSocket not connected, cannot send message');
+        showReconnectionOverlay();
+        
+        // Attempt immediate reconnection if not already trying
+        if (!reconnectTimer) {
+          connectWebSocket();
+        }
+      }
+    }
+
+    function handleWebSocketMessage(message) {
+      console.log('Received WebSocket message:', message);
+      
+      switch (message.type) {
+        case 'scene-complete':
+          handleSceneComplete(message.data.name, message.data.active);
+          break;
+        case 'light-complete':
+          handleLightComplete(message.data.strength);
+          break;
+        default:
+          console.warn('Unknown WebSocket message type:', message.type);
+      }
+    }
+
+    function handleSceneComplete(name, active) {
+      // Remove pressed state and add active state to the appropriate scene button
+      document.querySelectorAll('.scene-button').forEach(btn => {
+        btn.classList.remove('pressed', 'active');
+      });
+      
+      if (active) {
+        const button = document.querySelector(`[data-scene="${name}"]`);
+        if (button) {
+          button.classList.add('active');
+        }
+      }
+    }
+
+    function handleLightComplete(strength) {
+      // Update slider to reflect completed light level
+      currentLightLevel = strength;
+      updateSliderVisual(currentLightLevel);
+    }
 
     // Update slider visual state
     function updateSliderVisual(level) {
@@ -309,15 +498,10 @@
         currentLightLevel = newLevel;
         updateSliderVisual(currentLightLevel);
         
-        // Temporary: Refresh page when medium level is set
-        if (currentLightLevel === 2) {
-          console.log('Medium light level - refreshing page...');
-          setTimeout(() => location.reload(), 300);
-          return;
-        }
-        
         console.log(`Light level set to: ${lightLevels[currentLightLevel]}`);
-        // TODO: Send light control event to server
+        
+        // Send light control event to server via WebSocket
+        sendWebSocketMessage('light', { strength: currentLightLevel });
       }
     }
 
@@ -360,6 +544,10 @@
     // Scene button handling
     async function handleSceneButtonClick(button) {
       const scene = button.dataset.scene;
+      
+      // Check if this scene is currently active
+      const isCurrentlyActive = button.classList.contains('active');
+      const newActiveState = !isCurrentlyActive;
 
       // Add immediate pressed state for visual feedback
       button.classList.add('pressed');
@@ -371,25 +559,30 @@
       
       // Re-add pressed state to clicked button
       button.classList.add('pressed');
-      currentScene = scene;
       
-      console.log(`Scene activated: ${scene}`);
-      // TODO: Send scene control event to server
+      // Update current scene tracking
+      if (newActiveState) {
+        currentScene = scene;
+      } else {
+        currentScene = null;
+      }
       
-      // Simulate backend response delay (remove this when implementing real backend)
-      setTimeout(() => {
-        button.classList.remove('pressed');
-        button.classList.add('active');
-      }, 800);
+      console.log(`Scene ${newActiveState ? 'activated' : 'deactivated'}: ${scene}`);
+      
+      // Send scene control event to server via WebSocket
+      sendWebSocketMessage('scene', { name: scene, active: newActiveState });
     }
 
-    // Add click event listeners to scene buttons
+    // Scene button click handlers
     document.querySelectorAll('.scene-button').forEach(button => {
       button.addEventListener('click', () => handleSceneButtonClick(button));
     });
 
     // Initialize slider
     updateSliderVisual(currentLightLevel);
+
+    // Initialize WebSocket connection
+    connectWebSocket();
 
     // Prevent text selection and improve touch experience
     document.addEventListener('selectstart', e => e.preventDefault());
@@ -398,7 +591,11 @@
     // Handle visibility changes for better kiosk experience
     document.addEventListener('visibilitychange', () => {
       if (document.visibilityState === 'visible') {
-        // Could refresh state or reconnect here
+        // Reconnect WebSocket if needed
+        if (!ws || ws.readyState === WebSocket.CLOSED) {
+          reconnectAttempts = 0; // Reset attempts when coming back to foreground
+          connectWebSocket();
+        }
         console.log('Display became visible');
       }
     });

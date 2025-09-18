@@ -1,0 +1,17 @@
+{
+  "title": {
+    "en": "light-level-changed"
+  },
+  "tokens": [
+    {
+      "type": "number",
+      "name": "strength",
+      "title": {
+        "en": "strength"
+      },
+      "example": {
+        "en": "Strength of the light"
+      }
+    }
+  ]
+}
