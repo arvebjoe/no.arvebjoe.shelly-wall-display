@@ -109,11 +109,11 @@ export class KioskServer extends (EventEmitter as new () => TypedEmitter<KioskEv
     });
 
     // Serve static files from the public directory
-    this.app.use(express.static(path.join(__dirname, "..", "public")));
+    this.app.use(express.static(path.join(__dirname, "public")));
 
     // --- SPA fallback (Express 5-safe) ---
     this.app.get(/.*/, (_req: Request, res: Response) => {
-      res.sendFile(path.join(__dirname, "..", "public", "index.html"));
+      res.sendFile(path.join(__dirname, "public", "index.html"));
     });
   }
 
