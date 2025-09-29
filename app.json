@@ -134,5 +134,39 @@
         "id": "scene-complete"
       }
     ]
-  }
+  },
+  "drivers": [
+    {
+      "name": {
+        "en": "Display"
+      },
+      "class": "other",
+      "capabilities": [],
+      "platforms": [
+        "local"
+      ],
+      "connectivity": [
+        "lan"
+      ],
+      "images": {
+        "small": "/drivers/display/assets/images/small.png",
+        "large": "/drivers/display/assets/images/large.png",
+        "xlarge": "/drivers/display/assets/images/xlarge.png"
+      },
+      "pair": [
+        {
+          "id": "list_devices",
+          "template": "list_devices",
+          "navigation": {
+            "next": "add_devices"
+          }
+        },
+        {
+          "id": "add_devices",
+          "template": "add_devices"
+        }
+      ],
+      "id": "display"
+    }
+  ]
 }

@@ -10,6 +10,15 @@ import { WebSocketServer, WebSocket } from 'ws';
 type KioskEvents = {
   scene: (name: string, active: boolean) => void;
   light: (strength: number) => void;
+  newDevice: (ip: string) => void;
+}
+
+type DeviceInfo = {
+  ip: string;
+  registered: boolean;
+  lastSeen: Date;
+  failedPings: number;
+  ws?: WebSocket;
 }
 
 type WebSocketMessage = {
@@ -38,6 +47,8 @@ export class KioskServer extends (EventEmitter as new () => TypedEmitter<KioskEv
   private port: number;
   private pingCounter: number = 0;
   private clients: Set<WebSocket> = new Set();
+  private devices: Map<string, DeviceInfo> = new Map();
+  private pingInterval: NodeJS.Timeout | null = null;
 
   constructor(port: number = 8123) {
     super();
@@ -108,12 +119,30 @@ export class KioskServer extends (EventEmitter as new () => TypedEmitter<KioskEv
       next();
     });
 
-    // Serve static files from the public directory
-    this.app.use(express.static(path.join(__dirname, "public")));
+    // Serve static files (images, etc.) from the public directory
+    this.app.use(express.static(path.join(__dirname, "public"), {
+      index: false // Don't serve index.html automatically
+    }));
 
-    // --- SPA fallback (Express 5-safe) ---
-    this.app.get(/.*/, (_req: Request, res: Response) => {
-      res.sendFile(path.join(__dirname, "public", "index.html"));
+    // --- Device-aware routing ---
+    this.app.get(/.*/, (req: Request, res: Response) => {
+      // Extract client IP
+      const clientIp = this.extractClientIp(req);
+
+      // Check device registration status
+      const device = this.devices.get(clientIp);
+
+      if (!device) {
+        // First time seeing this device - will be registered via WebSocket
+        // For now, show pending page (device will be added when WS connects)
+        res.sendFile(path.join(__dirname, "public", "pending.html"));
+      } else if (!device.registered) {
+        // Device exists but not registered yet
+        res.sendFile(path.join(__dirname, "public", "pending.html"));
+      } else {
+        // Device is registered - show the functional UI
+        res.sendFile(path.join(__dirname, "public", "index.html"));
+      }
     });
   }
 
@@ -136,6 +165,12 @@ export class KioskServer extends (EventEmitter as new () => TypedEmitter<KioskEv
 
   public stop(): Promise<void> {
     return new Promise((resolve) => {
+      // Stop ping interval
+      if (this.pingInterval) {
+        clearInterval(this.pingInterval);
+        this.pingInterval = null;
+      }
+
       // Close WebSocket server
       if (this.wss) {
         this.wss.close(() => {
@@ -151,6 +186,9 @@ export class KioskServer extends (EventEmitter as new () => TypedEmitter<KioskEv
         }
       });
       this.clients.clear();
+
+      // Clear device registry
+      this.devices.clear();
 
       // Close HTTP server
       if (this.server) {
@@ -170,39 +208,80 @@ export class KioskServer extends (EventEmitter as new () => TypedEmitter<KioskEv
 
     this.wss = new WebSocketServer({ server: this.server });
 
-    this.wss.on('connection', (ws: WebSocket) => {
-      console.log('WebSocket client connected');
+    this.wss.on('connection', (ws: WebSocket, req) => {
+      const clientIp = this.extractClientIp(req);
+      console.log(`WebSocket client connected from ${clientIp}`);
       this.clients.add(ws);
+
+      // Register or update device
+      let device = this.devices.get(clientIp);
+      if (!device) {
+        // New device detected
+        device = {
+          ip: clientIp,
+          registered: false,
+          lastSeen: new Date(),
+          failedPings: 0,
+          ws: ws
+        };
+        this.devices.set(clientIp, device);
+        console.log(`New device detected: ${clientIp}`);
+        this.emit('newDevice', clientIp);
+      } else {
+        // Existing device reconnected
+        device.lastSeen = new Date();
+        device.failedPings = 0;
+        device.ws = ws;
+      }
 
       ws.on('message', (data: Buffer) => {
         try {
           const message: WebSocketMessage = JSON.parse(data.toString());
-          this.handleWebSocketMessage(message);
+          this.handleWebSocketMessage(message, clientIp);
         } catch (error) {
           console.error('Failed to parse WebSocket message:', error);
         }
       });
 
+      ws.on('pong', () => {
+        const device = this.devices.get(clientIp);
+        if (device) {
+          device.lastSeen = new Date();
+          device.failedPings = 0;
+        }
+      });
+
       ws.on('close', () => {
-        console.log('WebSocket client disconnected');
+        console.log(`WebSocket client disconnected: ${clientIp}`);
         this.clients.delete(ws);
+        const device = this.devices.get(clientIp);
+        if (device) {
+          device.ws = undefined;
+        }
       });
 
       ws.on('error', (error) => {
-        console.error('WebSocket error:', error);
+        console.error(`WebSocket error from ${clientIp}:`, error);
         this.clients.delete(ws);
       });
 
-      // Send initial connection confirmation
-      this.sendToClient(ws, {
-        type: 'scene-complete',
-        data: { name: 'connected', active: true }
-      });
+      // Send initial status based on registration state
+      this.sendDeviceStatus(clientIp);
     });
+
+    // Start ping interval for health checks
+    this.startPingInterval();
   }
 
-  private handleWebSocketMessage(message: WebSocketMessage): void {
-    console.log('Received WebSocket message:', message);
+  private handleWebSocketMessage(message: WebSocketMessage, clientIp: string): void {
+    console.log(`Received WebSocket message from ${clientIp}:`, message);
+
+    // Only process messages from registered devices
+    const device = this.devices.get(clientIp);
+    if (!device || !device.registered) {
+      console.warn(`Ignoring message from unregistered device: ${clientIp}`);
+      return;
+    }
 
     switch (message.type) {
       case 'scene':
@@ -276,6 +355,93 @@ export class KioskServer extends (EventEmitter as new () => TypedEmitter<KioskEv
       type: 'light-complete',
       data: { strength: discreteLevel }
     });
+  }
+
+  private extractClientIp(req: any): string {
+    // Try to get real IP from various headers (for proxies/reverse proxies)
+    const forwarded = req.headers['x-forwarded-for'];
+    if (forwarded) {
+      return forwarded.split(',')[0].trim();
+    }
+
+    const realIp = req.headers['x-real-ip'];
+    if (realIp) {
+      return realIp;
+    }
+
+    // Fallback to socket remote address
+    return req.socket.remoteAddress || 'unknown';
+  }
+
+  private sendDeviceStatus(ip: string): void {
+    const device = this.devices.get(ip);
+    if (!device || !device.ws) return;
+
+    const status = device.registered ? 'registered' : 'pending';
+    this.sendToClient(device.ws, {
+      type: 'scene-complete',
+      data: { name: `status-${status}`, active: true }
+    });
+  }
+
+  private startPingInterval(): void {
+    // Ping clients every 30 seconds
+    this.pingInterval = setInterval(() => {
+      this.devices.forEach((device, ip) => {
+        if (device.ws && device.ws.readyState === WebSocket.OPEN) {
+          device.ws.ping();
+          device.failedPings++;
+
+          // Remove device after 3 failed pings (90 seconds of no response)
+          if (device.failedPings >= 3) {
+            console.log(`Device ${ip} failed health check, removing`);
+            device.ws.close();
+            this.devices.delete(ip);
+          }
+        }
+      });
+    }, 30000);
+  }
+
+  // Public methods for device management
+  public getPendingDevices(): DeviceInfo[] {
+    const pending: DeviceInfo[] = [];
+    this.devices.forEach(device => {
+      if (!device.registered) {
+        pending.push(device);
+      }
+    });
+    return pending;
+  }
+
+  public registerDevice(ip: string): boolean {
+    const device = this.devices.get(ip);
+    if (!device) {
+      console.warn(`Cannot register unknown device: ${ip}`);
+      return false;
+    }
+
+    device.registered = true;
+    console.log(`Device registered: ${ip}`);
+    this.sendDeviceStatus(ip);
+    return true;
+  }
+
+  public unregisterDevice(ip: string): void {
+    const device = this.devices.get(ip);
+    if (device) {
+      // Mark as unregistered but keep in devices map (don't close connection)
+      device.registered = false;
+      console.log(`Device unregistered: ${ip}`);
+
+      // Notify the device to show pending page again
+      this.sendDeviceStatus(ip);
+    }
+  }
+
+  public isDeviceRegistered(ip: string): boolean {
+    const device = this.devices.get(ip);
+    return device ? device.registered : false;
   }
 
   public getApp(): Application {

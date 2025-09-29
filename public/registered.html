@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Device Registered - Shelly Wall Display</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            background: white;
+            border-radius: 20px;
+            padding: 60px 40px;
+            max-width: 600px;
+            text-align: center;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+        }
+
+        .icon {
+            font-size: 100px;
+            margin-bottom: 30px;
+            animation: checkmark 0.8s ease-in-out;
+        }
+
+        @keyframes checkmark {
+            0% {
+                transform: scale(0);
+                opacity: 0;
+            }
+            50% {
+                transform: scale(1.2);
+            }
+            100% {
+                transform: scale(1);
+                opacity: 1;
+            }
+        }
+
+        h1 {
+            color: #333;
+            font-size: 36px;
+            margin-bottom: 20px;
+            font-weight: 700;
+        }
+
+        .message {
+            color: #666;
+            font-size: 20px;
+            line-height: 1.6;
+            margin-bottom: 30px;
+        }
+
+        .info-box {
+            background: #f8f9fa;
+            border-radius: 12px;
+            padding: 30px;
+            margin-top: 30px;
+        }
+
+        .info-box h2 {
+            color: #11998e;
+            font-size: 20px;
+            margin-bottom: 15px;
+        }
+
+        .info-box p {
+            color: #555;
+            line-height: 1.6;
+            font-size: 16px;
+        }
+
+        .status {
+            display: inline-block;
+            padding: 12px 30px;
+            background: #28a745;
+            color: white;
+            border-radius: 25px;
+            font-weight: 600;
+            margin-top: 20px;
+            font-size: 16px;
+            box-shadow: 0 4px 15px rgba(40, 167, 69, 0.3);
+        }
+
+        .pulse {
+            animation: pulse 2s ease-in-out infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% {
+                opacity: 1;
+            }
+            50% {
+                opacity: 0.7;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="icon">✅</div>
+        <h1>Device Registered!</h1>
+        <p class="message">
+            Your Shelly Wall Display has been successfully added to Homey.
+        </p>
+
+        <div class="status pulse">🎉 Connected & Ready</div>
+
+        <div class="info-box">
+            <h2>What's Next?</h2>
+            <p>
+                Your custom interface is being prepared. The display will automatically update
+                once your personalized layout is configured in the Homey app.
+            </p>
+            <p style="margin-top: 15px;">
+                This page will refresh automatically when your configuration is ready.
+            </p>
+        </div>
+    </div>
+
+    <script>
+        // WebSocket connection to listen for configuration updates
+        let ws;
+
+        function connect() {
+            const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+            ws = new WebSocket(`${protocol}//${window.location.host}`);
+
+            ws.onmessage = (event) => {
+                try {
+                    const data = JSON.parse(event.data);
+                    // Check if device was unregistered
+                    if (data.type === 'scene-complete' && data.data.name === 'status-pending') {
+                        // Device has been unregistered, go back to pending
+                        window.location.href = '/pending.html';
+                    }
+                    // Future: Listen for UI configuration updates
+                    console.log('Received:', data);
+                } catch (error) {
+                    console.error('Failed to parse message:', error);
+                }
+            };
+
+            ws.onclose = () => {
+                console.log('WebSocket closed, reconnecting...');
+                setTimeout(connect, 3000);
+            };
+
+            ws.onerror = (error) => {
+                console.error('WebSocket error:', error);
+            };
+        }
+
+        connect();
+    </script>
+</body>
+</html>

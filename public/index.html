@@ -442,9 +442,15 @@
 
     function handleWebSocketMessage(message) {
       console.log('Received WebSocket message:', message);
-      
+
       switch (message.type) {
         case 'scene-complete':
+          // Check if device was unregistered
+          if (message.data.name === 'status-pending') {
+            // Device has been unregistered, go back to pending
+            window.location.href = '/pending.html';
+            return;
+          }
           handleSceneComplete(message.data.name, message.data.active);
           break;
         case 'light-complete':
