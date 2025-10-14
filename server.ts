@@ -11,6 +11,8 @@ type KioskEvents = {
   scene: (name: string, active: boolean) => void;
   light: (strength: number) => void;
   newDevice: (ip: string) => void;
+  deviceRegistered: (ip: string) => void;
+  deviceUnregistered: (ip: string) => void;
 }
 
 type DeviceInfo = {
@@ -48,6 +50,7 @@ export class KioskServer extends (EventEmitter as new () => TypedEmitter<KioskEv
   private pingCounter: number = 0;
   private clients: Set<WebSocket> = new Set();
   private devices: Map<string, DeviceInfo> = new Map();
+  private preRegisteredDevices: Set<string> = new Set(); // Devices marked as registered before connecting
   private pingInterval: NodeJS.Timeout | null = null;
 
   constructor(port: number = 8123) {
@@ -216,17 +219,26 @@ export class KioskServer extends (EventEmitter as new () => TypedEmitter<KioskEv
       // Register or update device
       let device = this.devices.get(clientIp);
       if (!device) {
-        // New device detected
+        // New device detected - check if it's pre-registered
+        const isPreRegistered = this.preRegisteredDevices.has(clientIp);
+        
         device = {
           ip: clientIp,
-          registered: false,
+          registered: isPreRegistered, // Use pre-registration status
           lastSeen: new Date(),
           failedPings: 0,
           ws: ws
         };
         this.devices.set(clientIp, device);
-        console.log(`New device detected: ${clientIp}`);
-        this.emit('newDevice', clientIp);
+        console.log(`New device detected: ${clientIp}, pre-registered: ${isPreRegistered}`);
+        
+        if (!isPreRegistered) {
+          // Only emit newDevice if it wasn't pre-registered
+          this.emit('newDevice', clientIp);
+        } else {
+          // Send registered status immediately
+          this.sendDeviceStatus(clientIp);
+        }
       } else {
         // Existing device reconnected
         device.lastSeen = new Date();
@@ -415,19 +427,26 @@ export class KioskServer extends (EventEmitter as new () => TypedEmitter<KioskEv
   }
 
   public registerDevice(ip: string): boolean {
+    // Mark device as pre-registered even if not connected yet
+    this.preRegisteredDevices.add(ip);
+    
     const device = this.devices.get(ip);
     if (!device) {
-      console.warn(`Cannot register unknown device: ${ip}`);
-      return false;
+      console.log(`Device ${ip} pre-registered (will be registered when it connects)`);
+      return true; // Return true since we've marked it for registration
     }
 
     device.registered = true;
     console.log(`Device registered: ${ip}`);
     this.sendDeviceStatus(ip);
+    this.emit('deviceRegistered', ip);
     return true;
   }
 
   public unregisterDevice(ip: string): void {
+    // Remove from pre-registered list
+    this.preRegisteredDevices.delete(ip);
+    
     const device = this.devices.get(ip);
     if (device) {
       // Mark as unregistered but keep in devices map (don't close connection)
@@ -436,12 +455,29 @@ export class KioskServer extends (EventEmitter as new () => TypedEmitter<KioskEv
 
       // Notify the device to show pending page again
       this.sendDeviceStatus(ip);
+      this.emit('deviceUnregistered', ip);
+    } else {
+      console.log(`Device ${ip} removed from pre-registration list`);
     }
   }
 
   public isDeviceRegistered(ip: string): boolean {
     const device = this.devices.get(ip);
     return device ? device.registered : false;
+  }
+
+  public getAllDevices(): Map<string, DeviceInfo> {
+    return new Map(this.devices);
+  }
+
+  public getConnectedDevices(): string[] {
+    const connected: string[] = [];
+    this.devices.forEach((device, ip) => {
+      if (device.ws && device.ws.readyState === WebSocket.OPEN) {
+        connected.push(ip);
+      }
+    });
+    return connected;
   }
 
   public getApp(): Application {
