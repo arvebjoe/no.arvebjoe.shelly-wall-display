@@ -57,6 +57,11 @@ export interface SliderLevel {
 export interface SliderNode extends BaseNode {
   type: 'slider';
   /**
+   * Slider name sent to Homey with every level change, so multiple
+   * sliders can be told apart in Flows. Defaults to "light".
+   */
+  name?: string;
+  /**
    * Discrete levels, shown top to bottom (index 0 at the top).
    * Defaults to DEFAULT_SLIDER_LEVELS.
    */
@@ -149,7 +154,7 @@ export function createDefaultLayout(): GuiLayout {
       padding: 16,
       children: [
         {
-          id: 'light-1', type: 'slider', weight: 1, levels: DEFAULT_SLIDER_LEVELS.map((l) => ({ ...l })),
+          id: 'light-1', type: 'slider', weight: 1, name: 'light', levels: DEFAULT_SLIDER_LEVELS.map((l) => ({ ...l })),
         },
         {
           id: 'btn-cinema',
@@ -245,6 +250,10 @@ export function validateLayout(layout: any): string[] {
         }
         break;
       case 'slider':
+        if (node.name !== undefined
+          && (typeof node.name !== 'string' || node.name.length === 0 || node.name.length > 64)) {
+          errors.push(`Slider ${node.id}: name must be a non-empty string (max 64 chars)`);
+        }
         if (node.labels !== undefined
           && (!Array.isArray(node.labels) || node.labels.some((l: any) => typeof l !== 'string'))) {
           errors.push(`Slider ${node.id}: labels must be an array of strings`);

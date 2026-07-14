@@ -2,14 +2,38 @@
   "title": {
     "en": "light-level-changed"
   },
+  "titleFormatted": {
+    "en": "Light level changed on slider [[name]]"
+  },
   "args": [
     {
       "type": "device",
       "name": "device",
       "filter": "driver_id=display"
+    },
+    {
+      "type": "text",
+      "name": "name",
+      "required": false,
+      "title": {
+        "en": "Slider name"
+      },
+      "placeholder": {
+        "en": "Slider name (empty = any slider)"
+      }
     }
   ],
   "tokens": [
+    {
+      "type": "string",
+      "name": "name",
+      "title": {
+        "en": "name"
+      },
+      "example": {
+        "en": "Name of the slider"
+      }
+    },
     {
       "type": "number",
       "name": "strength",

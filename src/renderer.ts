@@ -77,6 +77,7 @@ function renderNode(node: LayoutNode): string {
     case 'slider': {
       const s = node as SliderNode;
       const color = safeColor(s.color, '#f1c40f');
+      const name = (typeof s.name === 'string' && s.name.length > 0) ? s.name : 'light';
       const levels = sliderLevels(s).map((level) => ({
         name: typeof level.name === 'string' ? level.name : '',
         value: num(level.value, 0, 0, 1),
@@ -86,7 +87,7 @@ function renderNode(node: LayoutNode): string {
       const labelHtml = levels
         .map((l) => `<span>${escapeHtml(l.name)}</span>`).join('');
       const values = levels.map((l) => l.value).join(',');
-      return `<div class="gui-slider" data-slider data-values="${values}" style="${flex}--fill:${color};">
+      return `<div class="gui-slider" data-slider data-name="${escapeHtml(name)}" data-values="${values}" style="${flex}--fill:${color};">
   <div class="gui-slider-fill"></div>
   <div class="gui-slider-handle"></div>
   <div class="gui-slider-labels">${labelHtml}</div>
@@ -195,7 +196,6 @@ const STYLES = `
 
 const RUNTIME_SCRIPT = `
     var PREVIEW = window.__GUI_PREVIEW__ === true;
-    var currentLightValue = 0;
     var ws = null;
     var reconnectAttempts = 0;
     var reconnectTimer = null;
@@ -251,7 +251,8 @@ const RUNTIME_SCRIPT = `
             // Older server versions only send the discrete level (0-3)
             value = [0, 0.05, 0.5, 1][message.data.strength] || 0;
           }
-          updateSliders(value);
+          // Only move the named slider; no name means all sliders
+          updateSliders(value, message.data.name);
           break;
         }
         case 'reload':
@@ -287,15 +288,21 @@ const RUNTIME_SCRIPT = `
       return best;
     }
 
-    // Each slider snaps the 0-1 value to its own nearest configured level
-    function updateSliders(value) {
-      currentLightValue = value;
+    // Snaps one slider to its nearest configured level for a 0-1 value
+    function setSlider(slider, value) {
+      var values = sliderValues(slider);
+      var idx = nearestIndex(values, value);
+      slider._current = values[idx];
+      var pct = (idx / (values.length - 1)) * 100;
+      // Reveal the top pct% of the light_on image over the light_off background
+      slider.querySelector('.gui-slider-fill').style.clipPath = 'inset(0 0 ' + (100 - pct) + '% 0)';
+      slider.querySelector('.gui-slider-handle').style.top = pct + '%';
+    }
+
+    function updateSliders(value, name) {
       document.querySelectorAll('[data-slider]').forEach(function (slider) {
-        var values = sliderValues(slider);
-        var pct = (nearestIndex(values, value) / (values.length - 1)) * 100;
-        // Reveal the top pct% of the light_on image over the light_off background
-        slider.querySelector('.gui-slider-fill').style.clipPath = 'inset(0 0 ' + (100 - pct) + '% 0)';
-        slider.querySelector('.gui-slider-handle').style.top = pct + '%';
+        if (name && slider.dataset.name !== name) return;
+        setSlider(slider, value);
       });
     }
 
@@ -319,10 +326,10 @@ const RUNTIME_SCRIPT = `
         var rect = slider.getBoundingClientRect();
         var rel = Math.max(0, Math.min(1, (clientY - rect.top) / rect.height));
         var value = values[Math.round(rel * (values.length - 1))];
-        if (value !== currentLightValue) {
-          updateSliders(value);
+        if (value !== slider._current) {
+          setSlider(slider, value);
           if (PREVIEW) return;
-          send('light', { value: value });
+          send('light', { name: slider.dataset.name, value: value });
         }
       }
       slider.addEventListener('mousedown', function (e) { dragging = true; apply(e.clientY); });
@@ -333,7 +340,7 @@ const RUNTIME_SCRIPT = `
       document.addEventListener('touchend', function () { dragging = false; });
     });
 
-    updateSliders(currentLightValue);
+    updateSliders(0);
     connectWebSocket();
 
     document.addEventListener('selectstart', function (e) { e.preventDefault(); });

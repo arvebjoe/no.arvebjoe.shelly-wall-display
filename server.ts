@@ -12,7 +12,7 @@ import { renderLayoutHtml } from './src/renderer';
 
 type KioskEvents = {
   scene: (ip: string, name: string, active: boolean) => void;
-  light: (ip: string, strength: number) => void;
+  light: (ip: string, name: string, strength: number) => void;
   newDevice: (ip: string) => void;
   deviceRegistered: (ip: string) => void;
   deviceUnregistered: (ip: string) => void;
@@ -415,17 +415,21 @@ export class KioskServer extends (EventEmitter as new () => TypedEmitter<KioskEv
         }
         break;
 
-      case 'light':
+      case 'light': {
+        // Slider name identifies which slider moved (legacy GUIs send none)
+        const sliderName = (typeof message.data.name === 'string' && message.data.name.length > 0)
+          ? message.data.name : 'light';
         if (message.data.value !== undefined) {
           // Layout-based GUIs send the level's configured 0-1 value directly
-          this.emit('light', clientIp, Math.max(0, Math.min(1, message.data.value)));
+          this.emit('light', clientIp, sliderName, Math.max(0, Math.min(1, message.data.value)));
         } else if (message.data.strength !== undefined) {
           // The default GUI sends a discrete level (0-3); convert to 0-1 for Homey
           const lightLevels = [0, 0.05, 0.50, 1.00]; // OFF, LOW, MEDIUM, FULL
           const normalizedStrength = lightLevels[message.data.strength] || 0;
-          this.emit('light', clientIp, normalizedStrength);
+          this.emit('light', clientIp, sliderName, normalizedStrength);
         }
         break;
+      }
 
       default:
         console.warn('Unknown WebSocket message type:', message.type);
@@ -464,8 +468,8 @@ export class KioskServer extends (EventEmitter as new () => TypedEmitter<KioskEv
     });
   }
 
-  lightLevelComplete(ip: string, strength: number) {
-    console.log(`Light level complete called for ${ip} with strength: ${strength}`);
+  lightLevelComplete(ip: string, name: string | undefined, strength: number) {
+    console.log(`Light level complete called for ${ip}, slider: ${name || '(all)'}, strength: ${strength}`);
 
     // Convert 0-1 range back to discrete level (0-3) for the legacy default GUI
     const lightLevels = [0, 0.05, 0.50, 1.00]; // OFF, LOW, MEDIUM, FULL
@@ -481,10 +485,11 @@ export class KioskServer extends (EventEmitter as new () => TypedEmitter<KioskEv
       }
     }
 
-    // Layout-based GUIs use the raw value and snap to their own levels
+    // Layout-based GUIs use the raw value and snap to their own levels;
+    // the name targets one slider (undefined moves all sliders)
     this.sendToDevice(ip, {
       type: 'light-complete',
-      data: { strength: discreteLevel, value: strength }
+      data: { name, strength: discreteLevel, value: strength }
     });
   }
 

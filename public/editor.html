@@ -289,7 +289,7 @@
       switch (node.type) {
         case 'container': return (node.direction === 'row' ? 'Row' : 'Column') + ' (' + node.children.length + ')';
         case 'button': return node.label || node.scene || 'Button';
-        case 'slider': return 'Light slider (' + (Array.isArray(node.levels) ? node.levels.length : 4) + ' levels)';
+        case 'slider': return (node.name || 'light') + ' (' + (Array.isArray(node.levels) ? node.levels.length : 4) + ' levels)';
         case 'label': return node.text || 'Label';
         default: return node.type;
       }
@@ -312,9 +312,24 @@
       switch (type) {
         case 'container': return { id: uid('box'), type: 'container', direction: 'column', gap: 12, children: [] };
         case 'button': return { id: uid('btn'), type: 'button', label: 'Button', scene: 'scene-' + Math.floor(Math.random() * 1000) };
-        case 'slider': return { id: uid('sld'), type: 'slider', levels: defaultSliderLevels() };
+        case 'slider': return { id: uid('sld'), type: 'slider', name: 'light-' + Math.floor(Math.random() * 1000), levels: defaultSliderLevels() };
         case 'label': return { id: uid('lbl'), type: 'label', text: 'Label', fontSize: 24 };
       }
+    }
+
+    // Migrates sliders from older layout formats (legacy 4-label
+    // sliders, sliders without a name) so preview and save validate.
+    function normalizeLayout(l) {
+      walk(l.root, (node) => {
+        if (node.type !== 'slider') return;
+        if (!Array.isArray(node.levels) || node.levels.length < 2) {
+          node.levels = defaultSliderLevels(node.labels);
+        }
+        delete node.labels;
+        if (typeof node.name !== 'string' || node.name.length === 0) {
+          node.name = 'light';
+        }
+      });
     }
 
     // ---------- Loading ----------
@@ -371,6 +386,7 @@
       const res = await fetch('/api/editor/layouts/' + encodeURIComponent(ip));
       const data = await res.json();
       layout = data.layout;
+      normalizeLayout(layout);
       dirty = false;
       selectedId = layout.root.id;
       saveBtn.disabled = false;
@@ -549,12 +565,14 @@
         }
 
         case 'slider': {
-          // Migrate the legacy fixed-4-label format to named levels with values
-          if (!Array.isArray(node.levels) || node.levels.length < 2) {
-            node.levels = defaultSliderLevels(node.labels);
-          }
-          delete node.labels;
+          normalizeLayout(layout); // safety net for nodes added outside the editor
           const levels = node.levels;
+
+          addField('Name', textInput(node.name, (v) => { node.name = v; }));
+          const nameHint = document.createElement('div');
+          nameHint.className = 'hint';
+          nameHint.textContent = 'Identifies this slider in the "light-level-changed" Flow trigger, so multiple sliders can be told apart.';
+          el.appendChild(nameHint);
 
           levels.forEach((level, i) => {
             const wrap = document.createElement('span');

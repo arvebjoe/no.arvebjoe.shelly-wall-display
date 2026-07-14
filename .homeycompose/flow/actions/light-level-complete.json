@@ -3,13 +3,24 @@
     "en": "light-level-complete"
   },
   "titleFormatted": {
-    "en": "Set light level [[strength]] as completed on the display"
+    "en": "Set light level [[strength]] on slider [[name]] as completed on the display"
   },
   "args": [
     {
       "type": "device",
       "name": "device",
       "filter": "driver_id=display"
+    },
+    {
+      "type": "text",
+      "name": "name",
+      "required": false,
+      "title": {
+        "en": "Slider name"
+      },
+      "placeholder": {
+        "en": "Slider name (empty = all sliders)"
+      }
     },
     {
       "type": "number",

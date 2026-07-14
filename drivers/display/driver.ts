@@ -15,6 +15,11 @@ module.exports = class DisplayDriver extends Homey.Driver {
     this.sceneSelectedTrigger = this.homey.flow.getDeviceTriggerCard('scene-selected');
     this.lightLevelChangedTrigger = this.homey.flow.getDeviceTriggerCard('light-level-changed');
 
+    // An empty slider name argument matches any slider on the display
+    this.lightLevelChangedTrigger.registerRunListener(
+      async (args, state) => !args.name || args.name === state.name,
+    );
+
     const kioskServer = this.getKioskServer();
     if (!kioskServer) {
       this.error('KioskServer not found in app, Flow triggers will not fire');
@@ -30,14 +35,14 @@ module.exports = class DisplayDriver extends Homey.Driver {
         this.sceneSelectedTrigger.trigger(device, { name, active }).catch(this.error);
       });
 
-      kioskServer.on('light', (ip: string, strength: number) => {
+      kioskServer.on('light', (ip: string, name: string, strength: number) => {
         const device = this.getDeviceByIp(ip);
         if (!device) {
           this.log(`Light level changed from unknown device ${ip}, ignoring`);
           return;
         }
-        this.log(`Light level changed on ${ip}: ${strength}`);
-        this.lightLevelChangedTrigger.trigger(device, { strength }).catch(this.error);
+        this.log(`Light level changed on ${ip}, slider ${name}: ${strength}`);
+        this.lightLevelChangedTrigger.trigger(device, { name, strength }, { name }).catch(this.error);
       });
     }
 
@@ -53,8 +58,8 @@ module.exports = class DisplayDriver extends Homey.Driver {
     this.homey.flow.getActionCard('light-level-complete')
       .registerRunListener(async (args) => {
         const ip = this.ipOf(args.device);
-        this.log(`Light level complete action for ${ip}:`, args.strength);
-        this.getKioskServer()?.lightLevelComplete(ip, args.strength);
+        this.log(`Light level complete action for ${ip}, slider ${args.name || '(all)'}:`, args.strength);
+        this.getKioskServer()?.lightLevelComplete(ip, args.name || undefined, args.strength);
         return true;
       });
   }
