@@ -2,6 +2,9 @@
   "title": {
     "en": "light-level-complete"
   },
+  "titleFormatted": {
+    "en": "Set light level [[strength]] as completed on the display"
+  },
   "args": [
     {
       "type": "number",
