@@ -456,6 +456,10 @@
         case 'light-complete':
           handleLightComplete(message.data.strength);
           break;
+        case 'reload':
+          // A new GUI was saved in the editor - reload to pick it up
+          window.location.reload();
+          break;
         default:
           console.warn('Unknown WebSocket message type:', message.type);
       }

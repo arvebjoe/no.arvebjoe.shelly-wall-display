@@ -1,0 +1,85 @@
+<!doctype html>
+<html>
+
+<head>
+  <meta charset="utf-8" />
+  <script type="text/javascript" src="/homey.js" data-origin="settings"></script>
+  <style>
+    .card {
+      background: var(--homey-color-white, #fff);
+      border: 1px solid var(--homey-color-mono-100, #e5e5e5);
+      border-radius: 8px;
+      padding: 16px;
+      margin-top: 8px;
+    }
+
+    #editor-url {
+      display: inline-block;
+      font-family: monospace;
+      font-size: 15px;
+      word-break: break-all;
+      margin: 8px 0;
+    }
+
+    .hint {
+      color: var(--homey-color-mono-500, #777);
+      font-size: 13px;
+      line-height: 1.5;
+    }
+
+    .error {
+      color: #c0392b;
+    }
+  </style>
+</head>
+
+<body>
+  <h1 data-i18n="settings.title">GUI Editor</h1>
+
+  <p class="hint" data-i18n="settings.intro">
+    Design the interface shown on your Shelly Wall Display in the web editor.
+    Open this address in a browser on the same network as your Homey:
+  </p>
+
+  <div class="card">
+    <a id="editor-url" href="#" target="_blank" rel="noopener">Loading…</a>
+    <div>
+      <button id="copy-btn" class="hy-nostyle" style="display:none">Copy link</button>
+    </div>
+  </div>
+
+  <p class="hint">
+    In the editor you pick a display device, choose its screen size, and build
+    the GUI from containers, buttons, sliders and labels with a live preview.
+    Saving pushes the new GUI straight to the display.
+  </p>
+
+  <script type="text/javascript">
+    function onHomeyReady(Homey) {
+      var link = document.getElementById('editor-url');
+      var copyBtn = document.getElementById('copy-btn');
+
+      Homey.api('GET', '/editor-url', null, function (err, url) {
+        if (err || !url) {
+          link.textContent = 'Could not determine the editor address';
+          link.classList.add('error');
+          link.removeAttribute('href');
+        } else {
+          link.textContent = url;
+          link.href = url;
+          copyBtn.style.display = 'inline-block';
+          copyBtn.addEventListener('click', function () {
+            if (navigator.clipboard) {
+              navigator.clipboard.writeText(url);
+            }
+            copyBtn.textContent = 'Copied!';
+            setTimeout(function () { copyBtn.textContent = 'Copy link'; }, 1500);
+          });
+        }
+        Homey.ready();
+      });
+    }
+  </script>
+</body>
+
+</html>
