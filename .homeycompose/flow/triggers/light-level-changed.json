@@ -2,6 +2,13 @@
   "title": {
     "en": "light-level-changed"
   },
+  "args": [
+    {
+      "type": "device",
+      "name": "device",
+      "filter": "driver_id=display"
+    }
+  ],
   "tokens": [
     {
       "type": "number",

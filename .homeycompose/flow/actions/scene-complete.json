@@ -7,8 +7,16 @@
   },
   "args": [
     {
+      "type": "device",
+      "name": "device",
+      "filter": "driver_id=display"
+    },
+    {
       "type": "text",
       "name": "name",
+      "title": {
+        "en": "Scene name"
+      },
       "placeholder": {
         "en": "Name of the scene"
       }
@@ -16,6 +24,9 @@
     {
       "type": "dropdown",
       "name": "active",
+      "title": {
+        "en": "Active"
+      },
       "values": [
         {
           "id": "true",

@@ -11,8 +11,8 @@ import { renderLayoutHtml } from './src/renderer';
 
 
 type KioskEvents = {
-  scene: (name: string, active: boolean) => void;
-  light: (strength: number) => void;
+  scene: (ip: string, name: string, active: boolean) => void;
+  light: (ip: string, strength: number) => void;
   newDevice: (ip: string) => void;
   deviceRegistered: (ip: string) => void;
   deviceUnregistered: (ip: string) => void;
@@ -405,7 +405,7 @@ export class KioskServer extends (EventEmitter as new () => TypedEmitter<KioskEv
     switch (message.type) {
       case 'scene':
         if (message.data.name !== undefined && message.data.active !== undefined) {
-          this.emit('scene', message.data.name, message.data.active);
+          this.emit('scene', clientIp, message.data.name, message.data.active);
         }
         break;
 
@@ -414,7 +414,7 @@ export class KioskServer extends (EventEmitter as new () => TypedEmitter<KioskEv
           // Convert discrete level (0-3) to custom 0-1 range for Homey
           const lightLevels = [0, 0.05, 0.50, 1.00]; // OFF, LOW, MEDIUM, FULL
           const normalizedStrength = lightLevels[message.data.strength] || 0;
-          this.emit('light', normalizedStrength);
+          this.emit('light', clientIp, normalizedStrength);
         }
         break;
 
@@ -429,21 +429,24 @@ export class KioskServer extends (EventEmitter as new () => TypedEmitter<KioskEv
     }
   }
 
-  private broadcastToClients(response: WebSocketResponse): void {
-    this.clients.forEach(client => {
-      this.sendToClient(client, response);
-    });
+  /** Sends a message to a single device's WebSocket, if it is connected. */
+  private sendToDevice(ip: string, response: WebSocketResponse): void {
+    const device = this.devices.get(ip);
+    if (device?.ws && device.ws.readyState === WebSocket.OPEN) {
+      this.sendToClient(device.ws, response);
+    } else {
+      console.warn(`Cannot send ${response.type} to ${ip}: device not connected`);
+    }
   }
 
 
-  sceneComplete(name: string, active: boolean | string) {
+  sceneComplete(ip: string, name: string, active: boolean | string) {
     // Convert string 'true'/'false' to actual boolean
     const isActive = typeof active === 'string' ? active === 'true' : active;
-    
-    console.log(`Scene complete called with name: ${name}, active: ${active} (converted to boolean: ${isActive})`);
 
-    // Broadcast to all connected WebSocket clients
-    this.broadcastToClients({
+    console.log(`Scene complete called for ${ip} with name: ${name}, active: ${active} (converted to boolean: ${isActive})`);
+
+    this.sendToDevice(ip, {
       type: 'scene-complete',
       data: {
         name,
@@ -452,8 +455,8 @@ export class KioskServer extends (EventEmitter as new () => TypedEmitter<KioskEv
     });
   }
 
-  lightLevelComplete(strength: number) {
-    console.log(`Light level complete called with strength: ${strength}`);
+  lightLevelComplete(ip: string, strength: number) {
+    console.log(`Light level complete called for ${ip} with strength: ${strength}`);
 
     // Convert 0-1 range back to discrete level (0-3) for frontend
     const lightLevels = [0, 0.05, 0.50, 1.00]; // OFF, LOW, MEDIUM, FULL
@@ -469,8 +472,7 @@ export class KioskServer extends (EventEmitter as new () => TypedEmitter<KioskEv
       }
     }
 
-    // Broadcast to all connected WebSocket clients
-    this.broadcastToClients({
+    this.sendToDevice(ip, {
       type: 'light-complete',
       data: { strength: discreteLevel }
     });

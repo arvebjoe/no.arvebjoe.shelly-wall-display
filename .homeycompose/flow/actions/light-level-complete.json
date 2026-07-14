@@ -7,8 +7,16 @@
   },
   "args": [
     {
+      "type": "device",
+      "name": "device",
+      "filter": "driver_id=display"
+    },
+    {
       "type": "number",
       "name": "strength",
+      "title": {
+        "en": "Strength"
+      },
       "placeholder": {
         "en": "The light level strength"
       },

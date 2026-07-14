@@ -2,6 +2,13 @@
   "title": {
     "en": "scene-selected"
   },
+  "args": [
+    {
+      "type": "device",
+      "name": "device",
+      "filter": "driver_id=display"
+    }
+  ],
   "tokens": [
     {
       "type": "string",

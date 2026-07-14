@@ -27,6 +27,7 @@
     "email": "arvebjoe@hotmail.com"
   },
   "brandColor": "#514278",
+  "support": "mailto:arvebjoe@hotmail.com",
   "api": {
     "getEditorUrl": {
       "method": "GET",
@@ -44,6 +45,13 @@
         "title": {
           "en": "light-level-changed"
         },
+        "args": [
+          {
+            "type": "device",
+            "name": "device",
+            "filter": "driver_id=display"
+          }
+        ],
         "tokens": [
           {
             "type": "number",
@@ -62,6 +70,13 @@
         "title": {
           "en": "scene-selected"
         },
+        "args": [
+          {
+            "type": "device",
+            "name": "device",
+            "filter": "driver_id=display"
+          }
+        ],
         "tokens": [
           {
             "type": "string",
@@ -97,8 +112,16 @@
         },
         "args": [
           {
+            "type": "device",
+            "name": "device",
+            "filter": "driver_id=display"
+          },
+          {
             "type": "number",
             "name": "strength",
+            "title": {
+              "en": "Strength"
+            },
             "placeholder": {
               "en": "The light level strength"
             },
@@ -118,8 +141,16 @@
         },
         "args": [
           {
+            "type": "device",
+            "name": "device",
+            "filter": "driver_id=display"
+          },
+          {
             "type": "text",
             "name": "name",
+            "title": {
+              "en": "Scene name"
+            },
             "placeholder": {
               "en": "Name of the scene"
             }
@@ -127,6 +158,9 @@
           {
             "type": "dropdown",
             "name": "active",
+            "title": {
+              "en": "Active"
+            },
             "values": [
               {
                 "id": "true",

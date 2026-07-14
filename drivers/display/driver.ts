@@ -3,11 +3,72 @@ import { KioskServer } from '../../server';
 
 module.exports = class DisplayDriver extends Homey.Driver {
 
+  private sceneSelectedTrigger!: Homey.FlowCardTriggerDevice;
+  private lightLevelChangedTrigger!: Homey.FlowCardTriggerDevice;
+
   /**
    * onInit is called when the driver is initialized.
    */
   async onInit() {
     this.log('DisplayDriver has been initialized');
+
+    this.sceneSelectedTrigger = this.homey.flow.getDeviceTriggerCard('scene-selected');
+    this.lightLevelChangedTrigger = this.homey.flow.getDeviceTriggerCard('light-level-changed');
+
+    const kioskServer = this.getKioskServer();
+    if (!kioskServer) {
+      this.error('KioskServer not found in app, Flow triggers will not fire');
+    } else {
+      // Trigger the Flow cards on the device the WebSocket message came from
+      kioskServer.on('scene', (ip: string, name: string, active: boolean) => {
+        const device = this.getDeviceByIp(ip);
+        if (!device) {
+          this.log(`Scene selected from unknown device ${ip}, ignoring`);
+          return;
+        }
+        this.log(`Scene selected on ${ip}: ${name}, active: ${active}`);
+        this.sceneSelectedTrigger.trigger(device, { name, active }).catch(this.error);
+      });
+
+      kioskServer.on('light', (ip: string, strength: number) => {
+        const device = this.getDeviceByIp(ip);
+        if (!device) {
+          this.log(`Light level changed from unknown device ${ip}, ignoring`);
+          return;
+        }
+        this.log(`Light level changed on ${ip}: ${strength}`);
+        this.lightLevelChangedTrigger.trigger(device, { strength }).catch(this.error);
+      });
+    }
+
+    // Action cards target the display selected in the Flow (args.device)
+    this.homey.flow.getActionCard('scene-complete')
+      .registerRunListener(async (args) => {
+        const ip = this.ipOf(args.device);
+        this.log(`Scene complete action for ${ip}:`, args.name, args.active);
+        this.getKioskServer()?.sceneComplete(ip, args.name, args.active);
+        return true;
+      });
+
+    this.homey.flow.getActionCard('light-level-complete')
+      .registerRunListener(async (args) => {
+        const ip = this.ipOf(args.device);
+        this.log(`Light level complete action for ${ip}:`, args.strength);
+        this.getKioskServer()?.lightLevelComplete(ip, args.strength);
+        return true;
+      });
+  }
+
+  private getKioskServer(): KioskServer | undefined {
+    return (this.homey.app as any).kioskServer;
+  }
+
+  private ipOf(device: Homey.Device): string {
+    return device.getData().id || device.getStore().ip;
+  }
+
+  private getDeviceByIp(ip: string): Homey.Device | undefined {
+    return this.getDevices().find((device) => this.ipOf(device) === ip);
   }
 
   /**
@@ -17,10 +78,7 @@ module.exports = class DisplayDriver extends Homey.Driver {
   async onPairListDevices() {
     this.log('onPairListDevices called');
 
-    // Get the KioskServer instance from the app
-    const app = this.homey.app as any;
-    const kioskServer: KioskServer = app.kioskServer;
-
+    const kioskServer = this.getKioskServer();
     if (!kioskServer) {
       this.error('KioskServer not found in app');
       return [];
