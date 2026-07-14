@@ -62,11 +62,7 @@ module.exports = class DisplayDevice extends Homey.Device {
    * @param {string[]} event.changedKeys An array of keys changed since the previous version
    * @returns {Promise<string|void>} return a custom message that will be displayed
    */
-  async onSettings({
-    oldSettings,
-    newSettings,
-    changedKeys,
-  }: {
+  async onSettings(_event: {
     oldSettings: { [key: string]: boolean | string | number | undefined | null };
     newSettings: { [key: string]: boolean | string | number | undefined | null };
     changedKeys: string[];

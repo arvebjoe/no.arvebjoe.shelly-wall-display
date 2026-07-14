@@ -9,7 +9,7 @@ A Homey app (SDK v3, TypeScript) that turns a Shelly Wall Display into a kiosk c
 ## Commands
 
 - `npm run build` — TypeScript compile (output goes to `.homeybuild/`)
-- `npm run lint` — ESLint (`eslint-config-athom`)
+- `npm run lint` — ESLint 9 flat config (`eslint.config.mjs`: js + typescript-eslint recommended)
 - `homey app run` — run the app on a Homey for development (Homey CLI)
 - `homey app validate --level verified` — validation; CI runs this on every push
 - There are no tests.
