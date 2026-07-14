@@ -27,6 +27,12 @@
     "email": "arvebjoe@hotmail.com"
   },
   "brandColor": "#514278",
+  "api": {
+    "getEditorUrl": {
+      "method": "GET",
+      "path": "/editor-url"
+    }
+  },
   "tags": {
     "en": [
       "It works!"

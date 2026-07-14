@@ -2,9 +2,13 @@
 
 import Homey from 'homey';
 import { KioskServer } from './server';
+import { LayoutStore } from './src/layout-store';
+
+const SERVER_PORT = 8123;
 
 module.exports = class ShellyWallDisplayApp extends Homey.App {
-  private kioskServer!: KioskServer;
+  public kioskServer!: KioskServer;
+  private layoutStore!: LayoutStore;
   private sceneSelectionTrigger!: Homey.FlowCardTrigger;
   private lightLevelTrigger!: Homey.FlowCardTrigger;
   private sceneCompleteAction!: Homey.FlowCardAction;
@@ -17,14 +21,18 @@ module.exports = class ShellyWallDisplayApp extends Homey.App {
     this.log('ShellyWallDisplayApp has been initialized');
 
     try {
-      // Get port from environment or use default
-      const port = 8123;
+      // Layouts (JSON + rendered HTML) are persisted in /userdata,
+      // the only writable folder on a Homey Pro.
+      this.layoutStore = new LayoutStore();
 
       // Create and start the kiosk server
-      this.kioskServer = new KioskServer(port);
+      this.kioskServer = new KioskServer(SERVER_PORT, this.layoutStore);
       await this.kioskServer.start();
 
-      this.log(`Kiosk server started on port ${port}`);
+      this.log(`Kiosk server started on port ${SERVER_PORT}`);
+      this.getEditorUrl()
+        .then((url) => this.log(`GUI editor available at ${url}`))
+        .catch(() => { /* address not available yet */ });
     } catch (error) {
       this.error('Failed to start kiosk server:', error);
       return;
@@ -67,6 +75,18 @@ module.exports = class ShellyWallDisplayApp extends Homey.App {
       return Promise.resolve(true);
     });
 
+  }
+
+  /**
+   * Returns the LAN URL of the GUI editor, shown in the app's settings
+   * page. Uses Homey's local IP address so the link works for any browser
+   * on the same network.
+   */
+  async getEditorUrl(): Promise<string> {
+    // getLocalAddress() returns e.g. "192.168.1.100:80"
+    const address = await this.homey.cloud.getLocalAddress();
+    const host = address.split(':')[0];
+    return `http://${host}:${SERVER_PORT}/editor`;
   }
 
   /**

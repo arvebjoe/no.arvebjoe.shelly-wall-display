@@ -19,7 +19,7 @@ module.exports = class DisplayDevice extends Homey.Device {
       const kioskServer: KioskServer = app.kioskServer;
 
       if (kioskServer) {
-        kioskServer.registerDevice(ip);
+        kioskServer.registerDevice(ip, this.getName());
         this.log(`Device registered with IP: ${ip}`);
       }
     }
@@ -46,7 +46,7 @@ module.exports = class DisplayDevice extends Homey.Device {
       return;
     }
 
-    const success = kioskServer.registerDevice(ip);
+    const success = kioskServer.registerDevice(ip, this.getName());
     if (success) {
       this.log(`Device ${ip} successfully registered`);
     } else {
@@ -81,6 +81,17 @@ module.exports = class DisplayDevice extends Homey.Device {
    */
   async onRenamed(name: string) {
     this.log('DisplayDevice was renamed');
+
+    // Keep the name in the server registry (shown in the GUI editor) in sync
+    const deviceData = this.getData();
+    const deviceStore = this.getStore();
+    const ip = deviceData.id || deviceStore.ip;
+    const app = this.homey.app as any;
+    const kioskServer: KioskServer = app.kioskServer;
+
+    if (ip && kioskServer) {
+      kioskServer.registerDevice(ip, name);
+    }
   }
 
   /**

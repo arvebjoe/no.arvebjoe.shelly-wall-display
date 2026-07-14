@@ -4,6 +4,9 @@ import { Server } from 'http';
 import { EventEmitter } from "events";
 import { TypedEmitter } from "tiny-typed-emitter";
 import { WebSocketServer, WebSocket } from 'ws';
+import { LayoutStore } from './src/layout-store';
+import { SCREEN_SIZES, createDefaultLayout, validateLayout, GuiLayout } from './src/layout-types';
+import { renderLayoutHtml } from './src/renderer';
 
 
 
@@ -17,6 +20,7 @@ type KioskEvents = {
 
 type DeviceInfo = {
   ip: string;
+  name?: string;
   registered: boolean;
   lastSeen: Date;
   failedPings: number;
@@ -33,7 +37,7 @@ type WebSocketMessage = {
 }
 
 type WebSocketResponse = {
-  type: 'scene-complete' | 'light-complete';
+  type: 'scene-complete' | 'light-complete' | 'reload';
   data: {
     name?: string;
     active?: boolean;
@@ -51,18 +55,25 @@ export class KioskServer extends (EventEmitter as new () => TypedEmitter<KioskEv
   private clients: Set<WebSocket> = new Set();
   private devices: Map<string, DeviceInfo> = new Map();
   private preRegisteredDevices: Set<string> = new Set(); // Devices marked as registered before connecting
+  private deviceNames: Map<string, string> = new Map(); // Homey device names by IP
   private pingInterval: NodeJS.Timeout | null = null;
+  private layoutStore: LayoutStore;
 
-  constructor(port: number = 8123) {
+  constructor(port: number = 8123, layoutStore?: LayoutStore) {
     super();
 
     this.app = express();
     this.port = port;
+    this.layoutStore = layoutStore ?? new LayoutStore();
     this.setupMiddleware();
     this.setupRoutes();
   }
 
   private setupMiddleware(): void {
+    // Parse JSON bodies (used by the editor API); must come before the
+    // catch-all text parser, which skips bodies that are already parsed.
+    this.app.use(express.json({ limit: "512kb" }));
+
     // Parse text body with limit
     this.app.use(express.text({ type: "*/*", limit: "50kb" }));
 
@@ -127,26 +138,121 @@ export class KioskServer extends (EventEmitter as new () => TypedEmitter<KioskEv
       index: false // Don't serve index.html automatically
     }));
 
+    // --- GUI editor ---
+    this.setupEditorRoutes();
+
     // --- Device-aware routing ---
-    this.app.get(/.*/, (req: Request, res: Response) => {
+    this.app.get(/.*/, async (req: Request, res: Response) => {
       // Extract client IP
       const clientIp = this.extractClientIp(req);
 
-      // Check device registration status
+      // Check device registration status. A device paired in Homey is
+      // pre-registered even before its WebSocket has connected.
       const device = this.devices.get(clientIp);
+      const registered = device?.registered || this.preRegisteredDevices.has(clientIp);
 
-      if (!device) {
-        // First time seeing this device - will be registered via WebSocket
-        // For now, show pending page (device will be added when WS connects)
+      if (!registered) {
+        // Unknown or not-yet-registered device - show pending page
+        // (device will be added when its WebSocket connects)
         res.sendFile(path.join(__dirname, "public", "pending.html"));
-      } else if (!device.registered) {
-        // Device exists but not registered yet
-        res.sendFile(path.join(__dirname, "public", "pending.html"));
+        return;
+      }
+
+      // Device is registered - serve its custom GUI if one has been
+      // created in the editor, otherwise fall back to the default UI.
+      if (await this.layoutStore.hasLayout(clientIp)) {
+        res.sendFile(this.layoutStore.htmlPath(clientIp));
       } else {
-        // Device is registered - show the functional UI
         res.sendFile(path.join(__dirname, "public", "index.html"));
       }
     });
+  }
+
+  private setupEditorRoutes(): void {
+    // The editor single-page app
+    this.app.get("/editor", (_req: Request, res: Response) => {
+      res.sendFile(path.join(__dirname, "public", "editor.html"));
+    });
+
+    // Devices that can be edited (known to the server or paired in Homey)
+    this.app.get("/api/editor/devices", async (_req: Request, res: Response) => {
+      const ips = new Set<string>([
+        ...this.devices.keys(),
+        ...this.preRegisteredDevices,
+      ]);
+
+      const devices = await Promise.all([...ips].map(async (ip) => {
+        const device = this.devices.get(ip);
+        return {
+          ip,
+          name: this.deviceNames.get(ip) || device?.name || null,
+          registered: device ? device.registered : this.preRegisteredDevices.has(ip),
+          connected: !!(device?.ws && device.ws.readyState === WebSocket.OPEN),
+          hasLayout: await this.layoutStore.hasLayout(ip),
+        };
+      }));
+
+      res.json(devices);
+    });
+
+    // Screen size presets for the editor dropdown
+    this.app.get("/api/editor/screens", (_req: Request, res: Response) => {
+      res.json(SCREEN_SIZES);
+    });
+
+    // Load the stored layout for a device (or a default template)
+    this.app.get("/api/editor/layouts/:ip", async (req: Request, res: Response) => {
+      try {
+        const layout = await this.layoutStore.loadLayout(req.params.ip);
+        if (layout) {
+          res.json({ exists: true, layout });
+        } else {
+          res.json({ exists: false, layout: createDefaultLayout() });
+        }
+      } catch (error) {
+        res.status(400).json({ error: String(error) });
+      }
+    });
+
+    // Save a layout: validates, stores JSON + rendered HTML, reloads the display
+    this.app.put("/api/editor/layouts/:ip", async (req: Request, res: Response) => {
+      const layout = req.body as GuiLayout;
+      const errors = validateLayout(layout);
+      if (errors.length > 0) {
+        res.status(400).json({ ok: false, errors });
+        return;
+      }
+
+      try {
+        await this.layoutStore.saveLayout(req.params.ip, layout);
+      } catch (error) {
+        console.error('Failed to save layout:', error);
+        res.status(500).json({ ok: false, errors: [String(error)] });
+        return;
+      }
+
+      // Tell the display to reload so the new GUI shows up immediately
+      this.sendReload(req.params.ip);
+      res.json({ ok: true });
+    });
+
+    // Render a live preview without saving (WebSocket runtime disabled)
+    this.app.post("/api/editor/preview", (req: Request, res: Response) => {
+      const layout = req.body as GuiLayout;
+      const errors = validateLayout(layout);
+      if (errors.length > 0) {
+        res.status(400).json({ ok: false, errors });
+        return;
+      }
+      res.type("html").send(renderLayoutHtml(layout, { preview: true }));
+    });
+  }
+
+  private sendReload(ip: string): void {
+    const device = this.devices.get(ip);
+    if (device?.ws && device.ws.readyState === WebSocket.OPEN) {
+      this.sendToClient(device.ws, { type: 'reload', data: {} });
+    }
   }
 
   public start(): Promise<void> {
@@ -224,6 +330,7 @@ export class KioskServer extends (EventEmitter as new () => TypedEmitter<KioskEv
         
         device = {
           ip: clientIp,
+          name: this.deviceNames.get(clientIp),
           registered: isPreRegistered, // Use pre-registration status
           lastSeen: new Date(),
           failedPings: 0,
@@ -426,16 +533,22 @@ export class KioskServer extends (EventEmitter as new () => TypedEmitter<KioskEv
     return pending;
   }
 
-  public registerDevice(ip: string): boolean {
+  public registerDevice(ip: string, name?: string): boolean {
     // Mark device as pre-registered even if not connected yet
     this.preRegisteredDevices.add(ip);
-    
+    if (name) {
+      this.deviceNames.set(ip, name);
+    }
+
     const device = this.devices.get(ip);
     if (!device) {
       console.log(`Device ${ip} pre-registered (will be registered when it connects)`);
       return true; // Return true since we've marked it for registration
     }
 
+    if (name) {
+      device.name = name;
+    }
     device.registered = true;
     console.log(`Device registered: ${ip}`);
     this.sendDeviceStatus(ip);
@@ -446,7 +559,8 @@ export class KioskServer extends (EventEmitter as new () => TypedEmitter<KioskEv
   public unregisterDevice(ip: string): void {
     // Remove from pre-registered list
     this.preRegisteredDevices.delete(ip);
-    
+    this.deviceNames.delete(ip);
+
     const device = this.devices.get(ip);
     if (device) {
       // Mark as unregistered but keep in devices map (don't close connection)
