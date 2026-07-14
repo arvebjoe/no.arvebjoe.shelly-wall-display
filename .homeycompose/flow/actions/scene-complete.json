@@ -2,6 +2,9 @@
   "title": {
     "en": "scene-complete"
   },
+  "titleFormatted": {
+    "en": "Set scene [[name]] active [[active]] as completed on the display"
+  },
   "args": [
     {
       "type": "text",

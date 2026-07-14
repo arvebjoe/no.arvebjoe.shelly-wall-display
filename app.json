@@ -92,6 +92,9 @@
         "title": {
           "en": "light-level-complete"
         },
+        "titleFormatted": {
+          "en": "Set light level [[strength]] as completed on the display"
+        },
         "args": [
           {
             "type": "number",
@@ -109,6 +112,9 @@
       {
         "title": {
           "en": "scene-complete"
+        },
+        "titleFormatted": {
+          "en": "Set scene [[name]] active [[active]] as completed on the display"
         },
         "args": [
           {
