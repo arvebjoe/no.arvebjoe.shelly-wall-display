@@ -21,6 +21,9 @@ module.exports = class ShellyWallDisplayApp extends Homey.App {
       // the only writable folder on a Homey Pro.
       this.layoutStore = new LayoutStore();
 
+      // Pick up renderer changes for layouts saved by older app versions
+      await this.layoutStore.rerenderAll();
+
       // Create and start the kiosk server
       this.kioskServer = new KioskServer(SERVER_PORT, this.layoutStore);
       await this.kioskServer.start();

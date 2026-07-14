@@ -32,7 +32,10 @@ type WebSocketMessage = {
   data: {
     name?: string;
     active?: boolean;
+    /** Legacy default GUI: discrete level index (0-3). */
     strength?: number;
+    /** Layout-based GUIs: the configured level value (0-1). */
+    value?: number;
   };
 }
 
@@ -41,7 +44,10 @@ type WebSocketResponse = {
   data: {
     name?: string;
     active?: boolean;
+    /** Legacy default GUI: discrete level index (0-3). */
     strength?: number;
+    /** Layout-based GUIs: the raw value (0-1). */
+    value?: number;
   };
 }
 
@@ -410,8 +416,11 @@ export class KioskServer extends (EventEmitter as new () => TypedEmitter<KioskEv
         break;
 
       case 'light':
-        if (message.data.strength !== undefined) {
-          // Convert discrete level (0-3) to custom 0-1 range for Homey
+        if (message.data.value !== undefined) {
+          // Layout-based GUIs send the level's configured 0-1 value directly
+          this.emit('light', clientIp, Math.max(0, Math.min(1, message.data.value)));
+        } else if (message.data.strength !== undefined) {
+          // The default GUI sends a discrete level (0-3); convert to 0-1 for Homey
           const lightLevels = [0, 0.05, 0.50, 1.00]; // OFF, LOW, MEDIUM, FULL
           const normalizedStrength = lightLevels[message.data.strength] || 0;
           this.emit('light', clientIp, normalizedStrength);
@@ -458,7 +467,7 @@ export class KioskServer extends (EventEmitter as new () => TypedEmitter<KioskEv
   lightLevelComplete(ip: string, strength: number) {
     console.log(`Light level complete called for ${ip} with strength: ${strength}`);
 
-    // Convert 0-1 range back to discrete level (0-3) for frontend
+    // Convert 0-1 range back to discrete level (0-3) for the legacy default GUI
     const lightLevels = [0, 0.05, 0.50, 1.00]; // OFF, LOW, MEDIUM, FULL
     let discreteLevel = 0;
 
@@ -472,9 +481,10 @@ export class KioskServer extends (EventEmitter as new () => TypedEmitter<KioskEv
       }
     }
 
+    // Layout-based GUIs use the raw value and snap to their own levels
     this.sendToDevice(ip, {
       type: 'light-complete',
-      data: { strength: discreteLevel }
+      data: { strength: discreteLevel, value: strength }
     });
   }
 

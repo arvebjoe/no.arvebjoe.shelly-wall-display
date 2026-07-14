@@ -289,17 +289,30 @@
       switch (node.type) {
         case 'container': return (node.direction === 'row' ? 'Row' : 'Column') + ' (' + node.children.length + ')';
         case 'button': return node.label || node.scene || 'Button';
-        case 'slider': return 'Light slider';
+        case 'slider': return 'Light slider (' + (Array.isArray(node.levels) ? node.levels.length : 4) + ' levels)';
         case 'label': return node.text || 'Label';
         default: return node.type;
       }
+    }
+
+    function defaultSliderLevels(names) {
+      const defaults = [
+        { name: 'OFF', value: 0 },
+        { name: 'LOW', value: 0.05 },
+        { name: 'MED', value: 0.5 },
+        { name: 'FULL', value: 1 },
+      ];
+      if (Array.isArray(names) && names.length === 4) {
+        return defaults.map((l, i) => ({ name: names[i], value: l.value }));
+      }
+      return defaults;
     }
 
     function createNode(type) {
       switch (type) {
         case 'container': return { id: uid('box'), type: 'container', direction: 'column', gap: 12, children: [] };
         case 'button': return { id: uid('btn'), type: 'button', label: 'Button', scene: 'scene-' + Math.floor(Math.random() * 1000) };
-        case 'slider': return { id: uid('sld'), type: 'slider', labels: ['OFF', 'LOW', 'MED', 'FULL'] };
+        case 'slider': return { id: uid('sld'), type: 'slider', levels: defaultSliderLevels() };
         case 'label': return { id: uid('lbl'), type: 'label', text: 'Label', fontSize: 24 };
       }
     }
@@ -536,15 +549,43 @@
         }
 
         case 'slider': {
-          const labels = node.labels && node.labels.length === 4 ? node.labels : ['OFF', 'LOW', 'MED', 'FULL'];
-          node.labels = labels;
-          labels.forEach((_, i) => {
-            addField('Level ' + i + ' label', textInput(labels[i], (v) => { labels[i] = v; }));
+          // Migrate the legacy fixed-4-label format to named levels with values
+          if (!Array.isArray(node.levels) || node.levels.length < 2) {
+            node.levels = defaultSliderLevels(node.labels);
+          }
+          delete node.labels;
+          const levels = node.levels;
+
+          levels.forEach((level, i) => {
+            const wrap = document.createElement('span');
+            wrap.style.cssText = 'display:flex;gap:6px;flex:1;min-width:0';
+            const name = textInput(level.name, (v) => { level.name = v; });
+            const value = numberInput(level.value, (v) => { level.value = v; }, 0, 1, 0.01);
+            value.style.cssText = 'flex:0 0 70px';
+            value.title = 'Value sent to Homey (0–1)';
+            const remove = smallBtn('−', 'Remove level', () => {
+              levels.splice(i, 1);
+              markDirty(); schedulePreview(); renderTree(); renderInspector();
+            }, 'danger');
+            remove.disabled = levels.length <= 2;
+            wrap.appendChild(name); wrap.appendChild(value); wrap.appendChild(remove);
+            addField('Level ' + i, wrap);
           });
-          addField('Fill color', colorInput(node.color, (v) => { node.color = v; }));
+
+          const addLevel = document.createElement('button');
+          addLevel.className = 'small';
+          addLevel.textContent = '+ Add level';
+          addLevel.disabled = levels.length >= 12;
+          addLevel.onclick = () => {
+            levels.push({ name: 'LEVEL ' + levels.length, value: 1 });
+            markDirty(); schedulePreview(); renderTree(); renderInspector();
+          };
+          addField('', addLevel);
+
+          addField('Handle color', colorInput(node.color, (v) => { node.color = v; }));
           const hint = document.createElement('div');
           hint.className = 'hint';
-          hint.textContent = 'The slider sends levels 0–3 to the "light-level-changed" Flow trigger.';
+          hint.textContent = 'Levels are shown top to bottom on the display. Each level sends its value (0–1) to the "light-level-changed" Flow trigger.';
           el.appendChild(hint);
           break;
         }

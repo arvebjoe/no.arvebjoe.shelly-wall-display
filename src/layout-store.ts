@@ -77,6 +77,32 @@ export class LayoutStore {
     await fs.rename(`${htmlFile}.tmp`, htmlFile);
   }
 
+  /**
+   * Re-renders the stored HTML of every saved layout from its JSON.
+   * Called on app startup so renderer changes reach displays whose
+   * layout was saved with an older renderer version.
+   */
+  public async rerenderAll(): Promise<void> {
+    let files: string[];
+    try {
+      files = await fs.readdir(this.dir);
+    } catch {
+      return; // no layouts saved yet
+    }
+
+    for (const file of files.filter((f) => f.endsWith('.json'))) {
+      try {
+        const raw = await fs.readFile(path.join(this.dir, file), 'utf-8');
+        const layout = JSON.parse(raw) as GuiLayout;
+        const htmlFile = path.join(this.dir, `${file.slice(0, -'.json'.length)}.html`);
+        await fs.writeFile(`${htmlFile}.tmp`, renderLayoutHtml(layout), 'utf-8');
+        await fs.rename(`${htmlFile}.tmp`, htmlFile);
+      } catch (error) {
+        console.error(`Failed to re-render layout ${file}:`, error);
+      }
+    }
+  }
+
   public async deleteLayout(deviceIp: string): Promise<void> {
     await Promise.allSettled([
       fs.unlink(this.jsonPath(deviceIp)),

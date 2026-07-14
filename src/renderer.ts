@@ -8,7 +8,7 @@
  */
 
 import {
-  GuiLayout, LayoutNode, ContainerNode, ButtonNode, SliderNode, LabelNode,
+  GuiLayout, LayoutNode, ContainerNode, ButtonNode, SliderNode, LabelNode, sliderLevels,
 } from './layout-types';
 
 export interface RenderOptions {
@@ -77,12 +77,16 @@ function renderNode(node: LayoutNode): string {
     case 'slider': {
       const s = node as SliderNode;
       const color = safeColor(s.color, '#f1c40f');
-      const labels = (Array.isArray(s.labels) && s.labels.length === 4)
-        ? s.labels : ['OFF', 'LOW', 'MED', 'FULL'];
-      // Shown top-to-bottom as FULL..OFF (level 3 at the top).
-      const labelHtml = [...labels].reverse()
-        .map((l) => `<span>${escapeHtml(l)}</span>`).join('');
-      return `<div class="gui-slider" data-slider style="${flex}--fill:${color};">
+      const levels = sliderLevels(s).map((level) => ({
+        name: typeof level.name === 'string' ? level.name : '',
+        value: num(level.value, 0, 0, 1),
+      }));
+      // Shown top-to-bottom with the first level (off) at the top,
+      // matching the original hand-made GUI in public/index.html.
+      const labelHtml = levels
+        .map((l) => `<span>${escapeHtml(l.name)}</span>`).join('');
+      const values = levels.map((l) => l.value).join(',');
+      return `<div class="gui-slider" data-slider data-values="${values}" style="${flex}--fill:${color};">
   <div class="gui-slider-fill"></div>
   <div class="gui-slider-handle"></div>
   <div class="gui-slider-labels">${labelHtml}</div>
@@ -151,24 +155,27 @@ const STYLES = `
     .gui-button.pressed { transform: scale(0.95); }
 
     .gui-slider {
-      position: relative; background: #1a1a1a;
+      position: relative;
+      background: #1a1a1a url('/light_off.png') no-repeat center / cover;
       border: 2px solid #333; border-radius: var(--radius);
       overflow: hidden; cursor: grab;
       min-width: 0; min-height: 0; touch-action: none;
     }
     .gui-slider:active { cursor: grabbing; }
     .gui-slider-fill {
-      position: absolute; left: 0; bottom: 0; width: 100%; height: 0%;
-      background: linear-gradient(to top, var(--fill, #f1c40f), rgba(255,255,255,0.85));
-      opacity: 0.85; transition: height 0.25s ease; pointer-events: none;
+      position: absolute; inset: 0;
+      background: url('/light_on.png') no-repeat center / cover;
+      clip-path: inset(0 0 100% 0);
+      transition: clip-path 0.25s ease; pointer-events: none;
     }
     .gui-slider-handle {
-      position: absolute; left: 50%; bottom: 0%;
+      position: absolute; left: 50%; top: 0%;
       width: 56px; height: 8px;
       background: #fff; border: 2px solid #333; border-radius: 4px;
-      transform: translate(-50%, 50%); transition: bottom 0.25s ease;
+      transform: translate(-50%, -50%); transition: top 0.25s ease;
       box-shadow: 0 2px 8px rgba(0,0,0,0.3); pointer-events: none;
     }
+    .gui-slider:active .gui-slider-handle { background: var(--fill, #f1c40f); }
     .gui-slider-labels {
       position: absolute; right: 8px; top: 0; height: 100%;
       display: flex; flex-direction: column; justify-content: space-between;
@@ -188,7 +195,7 @@ const STYLES = `
 
 const RUNTIME_SCRIPT = `
     var PREVIEW = window.__GUI_PREVIEW__ === true;
-    var currentLightLevel = 0;
+    var currentLightValue = 0;
     var ws = null;
     var reconnectAttempts = 0;
     var reconnectTimer = null;
@@ -238,10 +245,15 @@ const RUNTIME_SCRIPT = `
           if (message.data.name === 'status-pending') { window.location.href = '/pending.html'; return; }
           setActiveScene(message.data.name, message.data.active);
           break;
-        case 'light-complete':
-          currentLightLevel = message.data.strength;
-          updateSliders(currentLightLevel);
+        case 'light-complete': {
+          var value = message.data.value;
+          if (value === undefined) {
+            // Older server versions only send the discrete level (0-3)
+            value = [0, 0.05, 0.5, 1][message.data.strength] || 0;
+          }
+          updateSliders(value);
           break;
+        }
         case 'reload':
           window.location.reload();
           break;
@@ -259,11 +271,31 @@ const RUNTIME_SCRIPT = `
       });
     }
 
-    function updateSliders(level) {
-      var pct = (level / 3) * 100;
+    function sliderValues(slider) {
+      if (!slider._values) {
+        var parsed = (slider.dataset.values || '').split(',').map(function (v) { return parseFloat(v); });
+        slider._values = parsed.length >= 2 && parsed.every(isFinite) ? parsed : [0, 0.05, 0.5, 1];
+      }
+      return slider._values;
+    }
+
+    function nearestIndex(values, value) {
+      var best = 0;
+      for (var i = 1; i < values.length; i++) {
+        if (Math.abs(values[i] - value) < Math.abs(values[best] - value)) best = i;
+      }
+      return best;
+    }
+
+    // Each slider snaps the 0-1 value to its own nearest configured level
+    function updateSliders(value) {
+      currentLightValue = value;
       document.querySelectorAll('[data-slider]').forEach(function (slider) {
-        slider.querySelector('.gui-slider-fill').style.height = pct + '%';
-        slider.querySelector('.gui-slider-handle').style.bottom = pct + '%';
+        var values = sliderValues(slider);
+        var pct = (nearestIndex(values, value) / (values.length - 1)) * 100;
+        // Reveal the top pct% of the light_on image over the light_off background
+        slider.querySelector('.gui-slider-fill').style.clipPath = 'inset(0 0 ' + (100 - pct) + '% 0)';
+        slider.querySelector('.gui-slider-handle').style.top = pct + '%';
       });
     }
 
@@ -279,21 +311,18 @@ const RUNTIME_SCRIPT = `
       });
     });
 
-    // Sliders (bottom = 0/off, top = 3/full)
+    // Sliders (top = first level/off, bottom = last level/full, like the original GUI)
     document.querySelectorAll('[data-slider]').forEach(function (slider) {
       var dragging = false;
-      function levelFromY(clientY) {
-        var rect = slider.getBoundingClientRect();
-        var rel = 1 - Math.max(0, Math.min(1, (clientY - rect.top) / rect.height));
-        return Math.round(rel * 3);
-      }
       function apply(clientY) {
-        var level = levelFromY(clientY);
-        if (level !== currentLightLevel) {
-          currentLightLevel = level;
-          updateSliders(level);
+        var values = sliderValues(slider);
+        var rect = slider.getBoundingClientRect();
+        var rel = Math.max(0, Math.min(1, (clientY - rect.top) / rect.height));
+        var value = values[Math.round(rel * (values.length - 1))];
+        if (value !== currentLightValue) {
+          updateSliders(value);
           if (PREVIEW) return;
-          send('light', { strength: level });
+          send('light', { value: value });
         }
       }
       slider.addEventListener('mousedown', function (e) { dragging = true; apply(e.clientY); });
@@ -304,7 +333,7 @@ const RUNTIME_SCRIPT = `
       document.addEventListener('touchend', function () { dragging = false; });
     });
 
-    updateSliders(currentLightLevel);
+    updateSliders(currentLightValue);
     connectWebSocket();
 
     document.addEventListener('selectstart', function (e) { e.preventDefault(); });

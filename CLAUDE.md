@@ -43,6 +43,6 @@ Data flow: Shelly display (browser) ⇄ WebSocket ⇄ `KioskServer` (Express, po
 ## Conventions and gotchas
 
 - Device registration survives restarts via "pre-registration": `DisplayDevice.onInit()` re-registers its IP before the display's WebSocket reconnects.
-- Light levels use two scales: the frontend sends discrete levels 0–3 (OFF/LOW/MED/FULL) which the server maps to Homey's 0–1 range as `[0, 0.05, 0.50, 1.00]`, and back again for `lightLevelComplete`.
+- Slider levels are defined per slider node in the layout (`levels: [{ name, value }]`, value 0–1, 2–12 entries, editable in the GUI editor; default OFF/LOW/MED/FULL = 0/0.05/0.5/1). Rendered GUIs send `{ value }` (the configured 0–1 value) over WebSocket; the legacy default GUI (`public/index.html`) still sends discrete `{ strength: 0–3 }`, which the server maps via `[0, 0.05, 0.50, 1.00]`. `light-complete` responses carry both `value` (raw 0–1) and `strength` (legacy discrete). The old slider `labels: string[]` format is still accepted and migrated on the fly.
 - Flow card boolean arguments may arrive as the strings `'true'`/`'false'`; `sceneComplete()` converts them.
 - Everything in `public/` (kiosk UI, editor SPA, pending page, images) is plain static HTML/JS — no frontend build step.

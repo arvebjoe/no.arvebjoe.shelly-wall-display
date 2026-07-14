@@ -47,15 +47,50 @@ export interface ButtonNode extends BaseNode {
   fontSize?: number;
 }
 
+export interface SliderLevel {
+  /** Label shown beside the slider. */
+  name: string;
+  /** Value (0-1) sent to the "light-level-changed" Flow trigger. */
+  value: number;
+}
+
 export interface SliderNode extends BaseNode {
   type: 'slider';
   /**
-   * Labels for the four discrete levels, top to bottom is FULL..OFF.
-   * Index 0 = level 0 (off), index 3 = level 3 (full).
+   * Discrete levels, shown top to bottom (index 0 at the top).
+   * Defaults to DEFAULT_SLIDER_LEVELS.
+   */
+  levels?: SliderLevel[];
+  /**
+   * @deprecated Legacy format: four label names with fixed values.
+   * Superseded by `levels`; still accepted for stored layouts.
    */
   labels?: string[];
-  /** Fill color of the slider. */
+  /** Accent color of the slider handle while dragging. */
   color?: string;
+}
+
+export const MAX_SLIDER_LEVELS = 12;
+
+export const DEFAULT_SLIDER_LEVELS: SliderLevel[] = [
+  { name: 'OFF', value: 0 },
+  { name: 'LOW', value: 0.05 },
+  { name: 'MED', value: 0.5 },
+  { name: 'FULL', value: 1 },
+];
+
+/**
+ * Returns the levels of a slider node, converting the legacy `labels`
+ * format and falling back to the defaults.
+ */
+export function sliderLevels(node: SliderNode): SliderLevel[] {
+  if (Array.isArray(node.levels) && node.levels.length >= 2) {
+    return node.levels;
+  }
+  if (Array.isArray(node.labels) && node.labels.length === DEFAULT_SLIDER_LEVELS.length) {
+    return node.labels.map((name, i) => ({ name, value: DEFAULT_SLIDER_LEVELS[i].value }));
+  }
+  return DEFAULT_SLIDER_LEVELS;
 }
 
 export interface LabelNode extends BaseNode {
@@ -114,7 +149,7 @@ export function createDefaultLayout(): GuiLayout {
       padding: 16,
       children: [
         {
-          id: 'light-1', type: 'slider', weight: 1, labels: ['OFF', 'LOW', 'MED', 'FULL'],
+          id: 'light-1', type: 'slider', weight: 1, levels: DEFAULT_SLIDER_LEVELS.map((l) => ({ ...l })),
         },
         {
           id: 'btn-cinema',
@@ -213,6 +248,15 @@ export function validateLayout(layout: any): string[] {
         if (node.labels !== undefined
           && (!Array.isArray(node.labels) || node.labels.some((l: any) => typeof l !== 'string'))) {
           errors.push(`Slider ${node.id}: labels must be an array of strings`);
+        }
+        if (node.levels !== undefined) {
+          if (!Array.isArray(node.levels) || node.levels.length < 2 || node.levels.length > MAX_SLIDER_LEVELS) {
+            errors.push(`Slider ${node.id}: levels must be an array of 2-${MAX_SLIDER_LEVELS} entries`);
+          } else if (node.levels.some((level: any) => !level || typeof level !== 'object'
+            || typeof level.name !== 'string' || level.name.length > 40
+            || !Number.isFinite(level.value) || level.value < 0 || level.value > 1)) {
+            errors.push(`Slider ${node.id}: each level needs a name (max 40 chars) and a value between 0 and 1`);
+          }
         }
         break;
       case 'label':
