@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Simplified Shelly Wall Display: bezel, screen and dashboard tiles -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <g fill="#000000">
+    <!-- Device bezel with the screen cut out -->
+    <path fill-rule="evenodd" d="
+      M104 40
+      h304
+      a64 64 0 0 1 64 64
+      v304
+      a64 64 0 0 1 -64 64
+      h-304
+      a64 64 0 0 1 -64 -64
+      v-304
+      a64 64 0 0 1 64 -64
+      z
+      M112 88
+      a24 24 0 0 0 -24 24
+      v288
+      a24 24 0 0 0 24 24
+      h288
+      a24 24 0 0 0 24 -24
+      v-288
+      a24 24 0 0 0 -24 -24
+      z" />
+
+    <!-- Header: temperature panel and readout column -->
+    <rect x="112" y="112" width="176" height="96" rx="12" />
+    <rect x="304" y="112" width="96" height="42" rx="10" />
+    <rect x="304" y="166" width="96" height="42" rx="10" />
+
+    <!-- Three dashboard tiles -->
+    <rect x="112" y="228" width="86" height="128" rx="12" />
+    <rect x="213" y="228" width="86" height="128" rx="12" />
+    <rect x="314" y="228" width="86" height="128" rx="12" />
+
+    <!-- Bottom status bar -->
+    <rect x="112" y="372" width="288" height="28" rx="10" />
+  </g>
+</svg>
