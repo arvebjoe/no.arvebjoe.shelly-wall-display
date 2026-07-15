@@ -69,9 +69,14 @@ function renderNode(node: LayoutNode): string {
       const fontSize = num(b.fontSize, 0, 8, 200);
       const fontStyle = fontSize ? `font-size:${fontSize}px;` : '';
       const image = safeImageUrl(b.image);
-      const imageHtml = image ? `<img src="${escapeHtml(image)}" alt="${escapeHtml(b.label || b.scene)}" draggable="false" />` : '';
-      const labelHtml = b.label ? `<span class="gui-button-label" style="${fontStyle}">${escapeHtml(b.label)}</span>` : '';
-      return `<button class="gui-button${image ? ' has-image' : ''}" data-scene="${escapeHtml(b.scene)}" style="${flex}--accent:${color};">${imageHtml}${labelHtml}</button>`;
+      const imageActive = safeImageUrl(b.imageActive);
+      const alt = escapeHtml(b.label || b.scene);
+      const imageHtml = (image ? `<img src="${escapeHtml(image)}" alt="${alt}" draggable="false" />` : '')
+        + (imageActive ? `<img class="gui-button-image-active" src="${escapeHtml(imageActive)}" alt="${alt}" draggable="false" />` : '');
+      const template = b.label && /\$\w+/.test(b.label) ? ` data-template="${escapeHtml(b.label)}"` : '';
+      const labelHtml = b.label ? `<span class="gui-button-label"${template} style="${fontStyle}">${escapeHtml(b.label)}</span>` : '';
+      const classes = `gui-button${image || imageActive ? ' has-image' : ''}${imageActive ? ' has-active-image' : ''}${b.glow === false ? ' no-glow' : ''}`;
+      return `<button class="${classes}" data-scene="${escapeHtml(b.scene)}" style="${flex}--accent:${color};">${imageHtml}${labelHtml}</button>`;
     }
 
     case 'slider': {
@@ -100,7 +105,10 @@ function renderNode(node: LayoutNode): string {
       const fontSize = num(l.fontSize, 24, 8, 300);
       const align = l.align === 'left' || l.align === 'right' ? l.align : 'center';
       const justifyMap = { left: 'flex-start', center: 'center', right: 'flex-end' };
-      return `<div class="gui-label" style="${flex}color:${color};font-size:${fontSize}px;`
+      // Text with $tokens (e.g. "$time") keeps its template in a data
+      // attribute so the runtime can re-resolve the values every second.
+      const template = /\$\w+/.test(l.text) ? ` data-template="${escapeHtml(l.text)}"` : '';
+      return `<div class="gui-label"${template} style="${flex}color:${color};font-size:${fontSize}px;`
         + `text-align:${align};justify-content:${justifyMap[align]};">${escapeHtml(l.text)}</div>`;
     }
 
@@ -148,11 +156,17 @@ const STYLES = `
       position: absolute; inset: 0; width: 100%; height: 100%;
       object-fit: cover;
       filter: grayscale(100%) brightness(0.7);
-      transition: filter 0.3s ease;
+      transition: filter 0.3s ease, opacity 0.3s ease;
     }
     .gui-button .gui-button-label { position: relative; z-index: 1; text-shadow: 0 2px 8px rgba(0,0,0,0.7); }
     .gui-button.active { box-shadow: 0 0 20px var(--accent, rgba(255,255,255,0.4)); }
+    .gui-button.no-glow.active { box-shadow: none; }
     .gui-button.active img { filter: grayscale(0%) brightness(1); }
+    /* With an active image the button crossfades between the two images
+       instead of graying out. */
+    .gui-button.has-active-image img { filter: none; }
+    .gui-button .gui-button-image-active { opacity: 0; }
+    .gui-button.active .gui-button-image-active { opacity: 1; }
     .gui-button.pressed { transform: scale(0.95); }
 
     .gui-slider {
@@ -255,6 +269,10 @@ const RUNTIME_SCRIPT = `
           updateSliders(value, message.data.name);
           break;
         }
+        case 'variable':
+          VARS[message.data.name] = message.data.value;
+          updateDynamicLabels();
+          break;
         case 'reload':
           window.location.reload();
           break;
@@ -266,8 +284,6 @@ const RUNTIME_SCRIPT = `
         btn.classList.remove('pressed');
         if (btn.dataset.scene === name) {
           btn.classList.toggle('active', !!active);
-        } else if (active) {
-          btn.classList.remove('active');
         }
       });
     }
@@ -339,6 +355,37 @@ const RUNTIME_SCRIPT = `
       document.addEventListener('touchmove', function (e) { if (dragging) { e.preventDefault(); apply(e.touches[0].clientY); } }, { passive: false });
       document.addEventListener('touchend', function () { dragging = false; });
     });
+
+    // Live values for $tokens in label and button text. Built-ins are
+    // resolved every second; anything else is a display variable pushed
+    // by the "set-variable" Flow card (unset variables show nothing).
+    // Add new built-ins by extending this map.
+    var LABEL_VALUES = {
+      time: function (now) {
+        return ('0' + now.getHours()).slice(-2) + ':' + ('0' + now.getMinutes()).slice(-2);
+      },
+      date: function (now) {
+        return now.toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long' });
+      }
+    };
+    var VARS = {};
+
+    var dynamicLabels = document.querySelectorAll('[data-template]');
+    function updateDynamicLabels() {
+      var now = new Date();
+      dynamicLabels.forEach(function (el) {
+        el.textContent = el.getAttribute('data-template').replace(/\\$(\\w+)/g, function (match, name) {
+          if (LABEL_VALUES[name]) return LABEL_VALUES[name](now);
+          if (VARS[name] !== undefined) return VARS[name];
+          // In the editor preview keep the token visible so it can be placed
+          return PREVIEW ? match : '';
+        });
+      });
+    }
+    if (dynamicLabels.length) {
+      updateDynamicLabels();
+      setInterval(updateDynamicLabels, 1000);
+    }
 
     updateSliders(0);
     connectWebSocket();

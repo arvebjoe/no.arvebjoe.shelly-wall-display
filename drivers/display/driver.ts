@@ -62,6 +62,14 @@ module.exports = class DisplayDriver extends Homey.Driver {
         this.getKioskServer()?.lightLevelComplete(ip, args.name || undefined, args.strength);
         return true;
       });
+
+    this.homey.flow.getActionCard('set-variable')
+      .registerRunListener(async (args) => {
+        const ip = this.ipOf(args.device);
+        this.log(`Set variable action for ${ip}: ${args.name} = "${args.value ?? ''}"`);
+        this.getKioskServer()?.setVariable(ip, args.name, args.value ?? '');
+        return true;
+      });
   }
 
   private getKioskServer(): KioskServer | undefined {

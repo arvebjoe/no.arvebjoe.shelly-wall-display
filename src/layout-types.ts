@@ -42,8 +42,15 @@ export interface ButtonNode extends BaseNode {
   scene: string;
   /** Optional image URL (e.g. "cinema.png" from the public folder). */
   image?: string;
+  /**
+   * Optional second image shown while the scene is active. When set, the
+   * button swaps between the two images instead of graying out `image`.
+   */
+  imageActive?: string;
   /** Accent color used for the active state glow. */
   color?: string;
+  /** Set to false to disable the glow around the button while active. */
+  glow?: boolean;
   fontSize?: number;
 }
 

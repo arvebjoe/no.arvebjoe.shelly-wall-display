@@ -530,6 +530,15 @@
         return wrap;
       };
 
+      const checkboxInput = (checked, onChange) => {
+        const i = document.createElement('input');
+        i.type = 'checkbox';
+        i.checked = checked;
+        i.style.cssText = 'flex:0 0 auto;width:auto';
+        i.onchange = () => { onChange(i.checked); markDirty(); schedulePreview(); };
+        return i;
+      };
+
       // Common: weight
       if (node !== layout.root) {
         addField('Weight', numberInput(node.weight ?? 1, (v) => { node.weight = v; }, 0.1, 100, 0.1));
@@ -549,6 +558,10 @@
 
         case 'button': {
           addField('Label', textInput(node.label, (v) => { node.label = v; }));
+          const labelHint = document.createElement('div');
+          labelHint.className = 'hint';
+          labelHint.textContent = 'Supports live values like $time or any $name set by the "set-variable" Flow card.';
+          el.appendChild(labelHint);
           addField('Scene name', textInput(node.scene, (v) => { node.scene = v; }));
           const sceneHint = document.createElement('div');
           sceneHint.className = 'hint';
@@ -559,7 +572,13 @@
           imgHint.className = 'hint';
           imgHint.textContent = 'E.g. "cinema.png" or "gym.png" from the app, or any http(s) URL.';
           el.appendChild(imgHint);
+          addField('Active image URL', textInput(node.imageActive, (v) => { node.imageActive = v || undefined; }));
+          const activeImgHint = document.createElement('div');
+          activeImgHint.className = 'hint';
+          activeImgHint.textContent = 'Optional. Shown while the scene is active — the button then swaps between the two images instead of graying out.';
+          el.appendChild(activeImgHint);
           addField('Accent color', colorInput(node.color, (v) => { node.color = v; }));
+          addField('Glow when active', checkboxInput(node.glow !== false, (v) => { node.glow = v ? undefined : false; }));
           addField('Font size', numberInput(node.fontSize, (v) => { node.fontSize = v; }, 8, 200));
           break;
         }
@@ -608,12 +627,17 @@
           break;
         }
 
-        case 'label':
+        case 'label': {
           addField('Text', textInput(node.text, (v) => { node.text = v; }));
+          const textHint = document.createElement('div');
+          textHint.className = 'hint';
+          textHint.textContent = 'Supports live values: $time (clock), $date (current date), or any $name set by the "set-variable" Flow card (unset variables show nothing).';
+          el.appendChild(textHint);
           addField('Font size', numberInput(node.fontSize ?? 24, (v) => { node.fontSize = v; }, 8, 300));
           addField('Color', colorInput(node.color, (v) => { node.color = v; }));
           addField('Align', selectInput(node.align || 'center', [['left', 'Left'], ['center', 'Center'], ['right', 'Right']], (v) => { node.align = v; }));
           break;
+        }
       }
     }
 

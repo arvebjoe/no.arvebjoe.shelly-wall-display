@@ -466,16 +466,14 @@
     }
 
     function handleSceneComplete(name, active) {
-      // Remove pressed state and add active state to the appropriate scene button
+      // Remove pressed state and set active state on the matching scene button only
       document.querySelectorAll('.scene-button').forEach(btn => {
-        btn.classList.remove('pressed', 'active');
+        btn.classList.remove('pressed');
       });
-      
-      if (active) {
-        const button = document.querySelector(`[data-scene="${name}"]`);
-        if (button) {
-          button.classList.add('active');
-        }
+
+      const button = document.querySelector(`[data-scene="${name}"]`);
+      if (button) {
+        button.classList.toggle('active', !!active);
       }
     }
 
@@ -559,15 +557,10 @@
       const isCurrentlyActive = button.classList.contains('active');
       const newActiveState = !isCurrentlyActive;
 
-      // Add immediate pressed state for visual feedback
-      button.classList.add('pressed');
-
-      // Remove active and pressed state from all scene buttons
+      // Remove pressed state from all scene buttons, then mark the clicked one
       document.querySelectorAll('.scene-button').forEach(btn => {
-        btn.classList.remove('active', 'pressed');
+        btn.classList.remove('pressed');
       });
-      
-      // Re-add pressed state to clicked button
       button.classList.add('pressed');
       
       // Update current scene tracking

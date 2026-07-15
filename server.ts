@@ -49,6 +49,13 @@ type WebSocketResponse = {
     /** Layout-based GUIs: the raw value (0-1). */
     value?: number;
   };
+} | {
+  /** Pushes a named display variable ($name tokens in labels/buttons). */
+  type: 'variable';
+  data: {
+    name: string;
+    value: string;
+  };
 }
 
 export class KioskServer extends (EventEmitter as new () => TypedEmitter<KioskEvents>) {
@@ -64,6 +71,7 @@ export class KioskServer extends (EventEmitter as new () => TypedEmitter<KioskEv
   private deviceNames: Map<string, string> = new Map(); // Homey device names by IP
   private pingInterval: NodeJS.Timeout | null = null;
   private layoutStore: LayoutStore;
+  private deviceVariables: Map<string, Map<string, string>> = new Map(); // Display variables by IP
 
   constructor(port: number = 8123, layoutStore?: LayoutStore) {
     super();
@@ -392,6 +400,9 @@ export class KioskServer extends (EventEmitter as new () => TypedEmitter<KioskEv
 
       // Send initial status based on registration state
       this.sendDeviceStatus(clientIp);
+
+      // Re-send stored display variables so a reloaded GUI shows current values
+      this.sendStoredVariables(clientIp);
     });
 
     // Start ping interval for health checks
@@ -493,6 +504,37 @@ export class KioskServer extends (EventEmitter as new () => TypedEmitter<KioskEv
     });
   }
 
+  /**
+   * Sets a display variable on one device (from the "set-variable" Flow
+   * card). Variables are kept in memory so reconnecting/reloading
+   * displays get their current values; an empty value clears them.
+   */
+  setVariable(ip: string, name: string, value: string) {
+    console.log(`Set variable on ${ip}: ${name} = "${value}"`);
+
+    let vars = this.deviceVariables.get(ip);
+    if (!vars) {
+      vars = new Map();
+      this.deviceVariables.set(ip, vars);
+    }
+    if (value === '') {
+      vars.delete(name);
+    } else {
+      vars.set(name, value);
+    }
+
+    this.sendToDevice(ip, { type: 'variable', data: { name, value } });
+  }
+
+  private sendStoredVariables(ip: string): void {
+    const device = this.devices.get(ip);
+    const vars = this.deviceVariables.get(ip);
+    if (!device?.ws || !vars) return;
+    vars.forEach((value, name) => {
+      this.sendToClient(device.ws!, { type: 'variable', data: { name, value } });
+    });
+  }
+
   private extractClientIp(req: any): string {
     // Try to get real IP from various headers (for proxies/reverse proxies)
     const forwarded = req.headers['x-forwarded-for'];
@@ -577,6 +619,7 @@ export class KioskServer extends (EventEmitter as new () => TypedEmitter<KioskEv
     // Remove from pre-registered list
     this.preRegisteredDevices.delete(ip);
     this.deviceNames.delete(ip);
+    this.deviceVariables.delete(ip);
 
     const device = this.devices.get(ip);
     if (device) {

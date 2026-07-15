@@ -213,6 +213,46 @@
           }
         ],
         "id": "scene-complete"
+      },
+      {
+        "title": {
+          "en": "set-variable"
+        },
+        "titleFormatted": {
+          "en": "Set display variable [[name]] to [[value]]"
+        },
+        "hint": {
+          "en": "Pushes a value to the display. Labels and buttons show it where their text contains $name. An empty value displays nothing."
+        },
+        "args": [
+          {
+            "type": "device",
+            "name": "device",
+            "filter": "driver_id=display"
+          },
+          {
+            "type": "text",
+            "name": "name",
+            "title": {
+              "en": "Variable name"
+            },
+            "placeholder": {
+              "en": "E.g. temp (shown where text contains $temp)"
+            }
+          },
+          {
+            "type": "text",
+            "name": "value",
+            "required": false,
+            "title": {
+              "en": "Value"
+            },
+            "placeholder": {
+              "en": "Value to show (empty = show nothing)"
+            }
+          }
+        ],
+        "id": "set-variable"
       }
     ]
   },
